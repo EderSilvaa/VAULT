@@ -8,7 +8,7 @@
 
 ## 📊 RESUMO EXECUTIVO
 
-Implementamos com sucesso as **3 funcionalidades principais do Sprint 1**, transformando o Finora de um visualizador passivo de dados em um **assistente financeiro acionável**.
+Implementamos com sucesso as **3 funcionalidades principais do Sprint 1**, transformando o Vault de um visualizador passivo de dados em um **assistente financeiro acionável**.
 
 ### Funcionalidades Implementadas:
 

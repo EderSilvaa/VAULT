@@ -4,7 +4,7 @@
 
 ### Resumo
 
-Foram corrigidos erros críticos que impediam a ativação das notificações push no sistema Finora.
+Foram corrigidos erros críticos que impediam a ativação das notificações push no sistema Vault.
 
 ## Problemas Encontrados e Soluções
 

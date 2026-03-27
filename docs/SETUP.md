@@ -1,4 +1,4 @@
-# Setup Guide - Finora Caixa Alerta
+# Setup Guide - Vault Caixa Alerta
 
 ## Guia Completo de Configuração do Backend
 
@@ -8,7 +8,7 @@
 2. **Faça login** ou crie uma conta gratuita
 3. **Clique em "New Project"**
 4. **Preencha os dados:**
-   - Nome: `finora-caixa-alerta`
+   - Nome: `vault-caixa-alerta`
    - Database Password: (escolha uma senha forte)
    - Region: `South America (São Paulo)` ou mais próxima
    - Plan: Free (para começar)
@@ -90,7 +90,7 @@ npm run dev
 ## Estrutura do Projeto Atualizada
 
 ```
-finora-caixa-alerta/
+vault-caixa-alerta/
 ├── supabase/
 │   └── schema.sql              # Schema do banco de dados
 │

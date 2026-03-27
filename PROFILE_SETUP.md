@@ -1,6 +1,6 @@
 # Configuração do Sistema de Perfis
 
-Este documento contém as instruções para configurar o sistema de perfis de usuário no Finora.
+Este documento contém as instruções para configurar o sistema de perfis de usuário no Vault.
 
 ## 📋 O que foi implementado
 

@@ -18,7 +18,7 @@
 1. No dashboard, procure por **"Applications"** ou **"Aplicações"**
 2. Clique em **"Create Application"** ou **"Criar Aplicação"**
 3. Preencha:
-   - **Nome**: Finora Caixa Alerta
+   - **Nome**: Vault Caixa Alerta
    - **Descrição**: Aplicativo de gestão financeira
 4. Clique em **"Create"** ou **"Criar"**
 
@@ -114,4 +114,4 @@ O Pluggy oferece um **plano gratuito** para desenvolvimento:
 - ✅ Todos os bancos sandbox
 - ✅ Suporte por email
 
-Perfeito para testar e desenvolver o Finora!
+Perfeito para testar e desenvolver o Vault!

@@ -1,4 +1,4 @@
-# Sistema de Memória de IA - Finora Caixa Alerta
+# Sistema de Memória de IA - Vault Caixa Alerta
 
 ## 📋 Sumário Executivo
 
@@ -793,8 +793,8 @@ TOTAL: ~R$ 5.101/mês = R$ 0,05/usuário
 - Frontend: [Nome Frontend Dev]
 
 **Dúvidas?**
-- Slack: #finora-ai-memory
-- Email: dev@finora.com
+- Slack: #vault-ai-memory
+- Email: dev@vault.com
 - Docs: /docs/AI_MEMORY_SYSTEM.md
 
 ---

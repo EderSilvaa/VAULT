@@ -273,7 +273,7 @@ Foco: alertas urgentes, economia, padrões ruins, ações acionáveis.`
       {
         role: 'system',
         content:
-          'CFO virtual do Finora. 10k+ usuários, R$ 2M+ economizados. Insights diretos com números reais, ações executáveis hoje. Zero teoria.',
+          'CFO virtual do Vault. 10k+ usuários, R$ 2M+ economizados. Insights diretos com números reais, ações executáveis hoje. Zero teoria.',
       },
       { role: 'user', content: prompt },
     ],
@@ -457,7 +457,7 @@ CONTEXTO FINANCEIRO DO USUÁRIO (Use para responder):
 - Padrão de Gastos: ${summary.categoryBreakdown}
 
 DIRETRIZES:
-- Você é o Finora AI, um consultor financeiro pessoal, empático e prático.
+- Você é o Vault AI, um consultor financeiro pessoal, empático e prático.
 - Use os dados acima para dar respostas específicas e personalizadas.
 - Se o usuário perguntar "como estou?", analise o saldo e fluxo de caixa.
 - Se perguntar "onde posso economizar?", olhe as categorias mais altas.

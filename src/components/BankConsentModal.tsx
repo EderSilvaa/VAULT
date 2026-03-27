@@ -77,7 +77,7 @@ export function BankConsentModal({
                   Importante: Leia com atenção
                 </p>
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                  Ao conectar sua conta bancária, você está autorizando o Finora a acessar e processar
+                  Ao conectar sua conta bancária, você está autorizando o Vault a acessar e processar
                   seus dados financeiros através do <strong>Open Finance Brasil</strong>, em conformidade
                   com a <strong>Lei Geral de Proteção de Dados (LGPD)</strong>.
                 </p>
@@ -227,7 +227,7 @@ export function BankConsentModal({
                 className="text-sm text-foreground leading-relaxed cursor-pointer flex-1"
               >
                 Li e compreendi todas as informações acima sobre como meus dados serão coletados,
-                armazenados e utilizados pelo Finora.
+                armazenados e utilizados pelo Vault.
               </label>
             </div>
 

@@ -1,4 +1,4 @@
-# 🚀 PRÓXIMOS PASSOS - Finora Caixa Alerta
+# 🚀 PRÓXIMOS PASSOS - Vault Caixa Alerta
 
 **Última atualização:** 2025-11-12
 **Status do Projeto:** ✅ MVP Funcional com Backend Integrado
@@ -317,7 +317,7 @@ npm install xlsx
 **React Native:**
 ```bash
 # Criar projeto
-npx create-expo-app finora-mobile
+npx create-expo-app vault-mobile
 
 # Compartilhar código:
 - Hooks (useAuth, useTransactions, etc.)

@@ -1,8 +1,8 @@
-# 🏦 Integração Open Finance Brasil - Finora Caixa Alerta
+# 🏦 Integração Open Finance Brasil - Vault Caixa Alerta
 
 ## Visão Geral
 
-Open Finance é **ESSENCIAL** para o Finora funcionar em produção. Sem ele, os dados continuam manuais. Com ele, você tem **sincronização automática** de transações bancárias em tempo real.
+Open Finance é **ESSENCIAL** para o Vault funcionar em produção. Sem ele, os dados continuam manuais. Com ele, você tem **sincronização automática** de transações bancárias em tempo real.
 
 ---
 
@@ -135,7 +135,7 @@ Open Finance é **ESSENCIAL** para o Finora funcionar em produção. Sem ele, os
 ```
 ┌─────────────┐
 │   Usuário   │
-│  (Finora)   │
+│  (Vault)   │
 └──────┬──────┘
        │
        │ 1. Clica "Conectar Banco"
@@ -169,7 +169,7 @@ Open Finance é **ESSENCIAL** para o Finora funcionar em produção. Sem ele, os
            │ 5. Webhook notification
            ↓
 ┌──────────────────────┐
-│   Finora Backend     │
+│   Vault Backend     │
 │  (Supabase Edge Fn)  │
 └──────────┬───────────┘
            │
@@ -183,7 +183,7 @@ Open Finance é **ESSENCIAL** para o Finora funcionar em produção. Sem ele, os
            │ 7. Real-time update
            ↓
 ┌──────────────────────┐
-│   Dashboard Finora   │ ← Dados aparecem!
+│   Dashboard Vault   │ ← Dados aparecem!
 └──────────────────────┘
 ```
 
@@ -471,7 +471,7 @@ Custo: Incluso nas syncs
 TOTAL ESTIMADO: R$ 3.000 - R$ 5.000/mês
 ```
 
-**Modelo de Receita Finora para cobrir:**
+**Modelo de Receita Vault para cobrir:**
 - Cobrar R$ 29,90/mês por usuário
 - 1.000 usuários = R$ 29.900/mês
 - Custo Open Finance: R$ 3.000 - R$ 5.000 (10-17% da receita)
@@ -675,6 +675,6 @@ Antes de ir para produção com Open Finance:
 
 ---
 
-**Open Finance é o diferencial do Finora!** Com ele, você sai na frente da concorrência oferecendo sincronização automática. 🚀
+**Open Finance é o diferencial do Vault!** Com ele, você sai na frente da concorrência oferecendo sincronização automática. 🚀
 
 Vamos implementar? Me avisa quando terminar o setup do Supabase que partimos para o Pluggy!

@@ -1,6 +1,6 @@
-# 🎨 Finora Design System
+# 🎨 Vault Design System
 
-Documentação completa do sistema de design da plataforma Finora, incluindo cores, tipografia, componentes, padrões e diretrizes de uso.
+Documentação completa do sistema de design da plataforma Vault, incluindo cores, tipografia, componentes, padrões e diretrizes de uso.
 
 ---
 
@@ -21,7 +21,7 @@ Documentação completa do sistema de design da plataforma Finora, incluindo cor
 
 ## 🎯 Filosofia de Design
 
-O design system da Finora é construído com foco em:
+O design system da Vault é construído com foco em:
 
 - **Profissionalismo**: Interface limpa e confiável para gestão financeira
 - **Clareza**: Informações financeiras apresentadas de forma clara e direta
@@ -85,7 +85,7 @@ Todas as cores são definidas no formato **HSL** para facilitar manipulações d
 
 ### Fonte
 
-A Finora utiliza a **fonte padrão do sistema** (system font stack) para melhor performance e consistência com o SO do usuário.
+A Vault utiliza a **fonte padrão do sistema** (system font stack) para melhor performance e consistência com o SO do usuário.
 
 ```css
 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -357,7 +357,7 @@ Todos os componentes seguem o padrão de composição do Radix UI com estilizaç
 
 ### Biblioteca de Ícones
 
-A Finora utiliza **Lucide React** para ícones:
+A Vault utiliza **Lucide React** para ícones:
 
 ```tsx
 import {
@@ -399,7 +399,7 @@ import {
 
 ## 🌙 Modo Dark
 
-O Finora possui suporte completo a modo escuro (dark mode).
+O Vault possui suporte completo a modo escuro (dark mode).
 
 ### Alternância de Tema
 
@@ -453,7 +453,7 @@ document.documentElement.classList.remove('dark')
 
 ### Otimizações Mobile
 
-Para melhorar performance em dispositivos móveis, o Finora desabilita efeitos pesados:
+Para melhorar performance em dispositivos móveis, o Vault desabilita efeitos pesados:
 
 ```css
 @media (max-width: 767px) {
@@ -713,4 +713,4 @@ Ao adicionar novos componentes ou padrões ao design system:
 ---
 
 **Última atualização**: 2025-11-20
-**Mantido por**: Equipe Finora
+**Mantido por**: Equipe Vault

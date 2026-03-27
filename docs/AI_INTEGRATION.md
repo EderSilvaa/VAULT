@@ -1,8 +1,8 @@
-# Integração OpenAI GPT-4o - Finora
+# Integração OpenAI GPT-4o - Vault
 
 ## Visão Geral
 
-O Finora agora possui análise financeira preditiva alimentada por **GPT-4o**, o modelo mais avançado da OpenAI para raciocínio matemático e análise de dados.
+O Vault agora possui análise financeira preditiva alimentada por **GPT-4o**, o modelo mais avançado da OpenAI para raciocínio matemático e análise de dados.
 
 ## Funcionalidades de IA
 

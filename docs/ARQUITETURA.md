@@ -1,8 +1,8 @@
-# Arquitetura do Finora - Caixa Alerta
+# Arquitetura do Vault - Caixa Alerta
 
 ## Visão Geral do Projeto
 
-**Finora - Caixa Alerta** é uma plataforma de gestão financeira e previsão de fluxo de caixa para empresas brasileiras. O sistema integra tecnologias modernas para fornecer análises em tempo real, sincronização bancária via Open Finance Brasil e insights alimentados por IA.
+**Vault - Caixa Alerta** é uma plataforma de gestão financeira e previsão de fluxo de caixa para empresas brasileiras. O sistema integra tecnologias modernas para fornecer análises em tempo real, sincronização bancária via Open Finance Brasil e insights alimentados por IA.
 
 ### Estatísticas do Projeto
 
@@ -1005,7 +1005,7 @@ VITE_SUPABASE_ANON_KEY=eyJxxx
 
 ## Conclusão
 
-**Finora - Caixa Alerta** é uma plataforma de gestão financeira **pronta para produção** com:
+**Vault - Caixa Alerta** é uma plataforma de gestão financeira **pronta para produção** com:
 
 - ✨ **Arquitetura moderna** com React 18, TypeScript, Vite
 - 🔐 **Segurança robusta** com RLS e conformidade LGPD

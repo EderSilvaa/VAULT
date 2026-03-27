@@ -486,7 +486,7 @@ const Dashboard = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 md:gap-3">
               <Logo size="md" />
-              <h1 className="text-xl md:text-2xl font-bold text-foreground">Finora</h1>
+              <h1 className="text-xl md:text-2xl font-bold text-foreground">Vault</h1>
             </div>
 
             <div className="flex items-center gap-2 md:gap-4">
@@ -697,7 +697,7 @@ const Dashboard = () => {
                   </CardHeader>
                 </Card>
 
-                {/* Impostos - FINORA TAX */}
+                {/* Impostos - VAULT TAX */}
                 <Card
                   className="relative overflow-hidden border-0 bg-gradient-to-br from-blue-500/10 via-card/90 to-card/70 backdrop-blur-xl shadow-2xl hover:shadow-blue-500/20 transition-all duration-300 hover:-translate-y-1 group cursor-pointer"
                   onClick={() => navigate('/dashboard/taxes')}
@@ -708,7 +708,7 @@ const Dashboard = () => {
                       <div className="space-y-1">
                         <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Impostos</CardTitle>
                         <div className="text-2xl font-bold text-blue-600">
-                          FINORA TAX
+                          VAULT TAX
                         </div>
                         <div className="text-xs text-blue-600 font-medium flex items-center gap-1">
                           Calcular impostos
@@ -1127,7 +1127,7 @@ const Dashboard = () => {
       <footer className="relative z-10 border-t border-border/40 py-8 mt-20">
         <div className="container mx-auto px-4">
           <p className="text-center text-sm text-muted-foreground">
-            IA Finora — seu copiloto financeiro.
+            IA Vault — seu copiloto financeiro.
           </p>
         </div>
       </footer>

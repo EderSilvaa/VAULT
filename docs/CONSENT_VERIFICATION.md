@@ -2,7 +2,7 @@
 
 ## Consentimento Implementado com Sucesso!
 
-O sistema de consentimento LGPD e Open Finance Brasil está **totalmente funcional** no Finora Caixa Alerta.
+O sistema de consentimento LGPD e Open Finance Brasil está **totalmente funcional** no Vault Caixa Alerta.
 
 ## O que foi implementado
 

@@ -1,4 +1,4 @@
-# 🚀 Funcionalidades Acionáveis - Finora Caixa Alerta
+# 🚀 Funcionalidades Acionáveis - Vault Caixa Alerta
 
 **Data:** 2025-11-12
 **Objetivo:** Ir além dos gráficos e agregar valor REAL para empresas
@@ -16,7 +16,7 @@
 
 ### 1. **Central de Pagamentos** ⏱️ 6-8 horas | 🔥 Alto Impacto
 
-**Problema atual:** Finora mostra despesas, mas não ajuda a pagar
+**Problema atual:** Vault mostra despesas, mas não ajuda a pagar
 
 **Solução:**
 - [ ] Listar boletos pendentes (DDA integration)
@@ -479,17 +479,17 @@ sem perder competitividade.
 
 ## 💡 FUNCIONALIDADES DIFERENCIAIS (Longo Prazo)
 
-### "Finora Score" - Saúde Financeira
+### "Vault Score" - Saúde Financeira
 - Score de 0-1000 baseado em múltiplos fatores
 - "Seu negócio está mais saudável que 78% das empresas similares"
 - Dicas para melhorar score
 
-### "Finora Antecipa" - Antecipação de Recebíveis
+### "Vault Antecipa" - Antecipação de Recebíveis
 - Parce com fintech para antecipação
 - Diretamente no app
-- Finora cobra comissão
+- Vault cobra comissão
 
-### "Finora Capital" - Empréstimo Facilitado
+### "Vault Capital" - Empréstimo Facilitado
 - IA pre-aprova crédito baseado em dados
 - Parceria com bancos digitais
 - Processo 100% digital
@@ -523,7 +523,7 @@ Para cada funcionalidade, medir:
 
 ## 🎬 CONCLUSÃO
 
-O Finora não deve ser apenas um "visualizador de dados", mas sim um **COPILOTO FINANCEIRO** que:
+O Vault não deve ser apenas um "visualizador de dados", mas sim um **COPILOTO FINANCEIRO** que:
 
 1. ✅ **Alerta** problemas antes de acontecerem
 2. ✅ **Sugere** ações concretas

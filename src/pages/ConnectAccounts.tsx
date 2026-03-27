@@ -76,7 +76,7 @@ const ConnectAccounts = () => {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Logo size="sm" />
-            <span className="text-xl font-bold text-primary-foreground">Finora</span>
+            <span className="text-xl font-bold text-primary-foreground">Vault</span>
           </div>
           
           <div className="flex items-center gap-3">
@@ -264,7 +264,7 @@ const ConnectAccounts = () => {
       {/* Footer */}
       <footer className="relative z-10 container mx-auto px-4 py-8 text-center">
         <p className="text-muted-foreground text-sm">
-          Transparência e controle em cada dado. Essa é a Finora.
+          Transparência e controle em cada dado. Essa é a Vault.
         </p>
       </footer>
     </div>

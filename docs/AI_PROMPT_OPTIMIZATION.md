@@ -271,7 +271,7 @@ preprocessFinancialData(data: any): any {
 
 **Depois:**
 ```
-'CFO virtual do Finora. 10k+ usuários, R$ 2M+ economizados. Insights diretos com números reais, ações executáveis hoje. Zero teoria.'
+'CFO virtual do Vault. 10k+ usuários, R$ 2M+ economizados. Insights diretos com números reais, ações executáveis hoje. Zero teoria.'
 ```
 
 **Redução: 75% | Impacto: +40% qualidade** 🎯

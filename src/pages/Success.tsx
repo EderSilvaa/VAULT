@@ -51,7 +51,7 @@ const Success = () => {
             Tudo pronto!
           </h1>
           <p className="text-lg text-muted-foreground">
-            A partir de agora, a Finora te avisa antes do aperto
+            A partir de agora, a Vault te avisa antes do aperto
           </p>
         </div>
 

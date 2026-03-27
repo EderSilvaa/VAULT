@@ -18,8 +18,8 @@ VitePWA({
       filename: 'sw.ts',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
       manifest: {
-        name: 'Finora - Caixa Alerta',
-        short_name: 'Finora',
+        name: 'Vault - Caixa Alerta',
+        short_name: 'Vault',
         description: 'Gestão financeira inteligente com IA para evitar caixa zero',
         theme_color: '#8B5CF6',
         background_color: '#ffffff',

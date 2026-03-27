@@ -77,7 +77,7 @@ const Onboarding = () => {
           </h1>
 
           <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl mx-auto">
-            A Finora te avisa quando seu caixa pode zerar e sugere exatamente o que fazer.
+            A Vault te avisa quando seu caixa pode zerar e sugere exatamente o que fazer.
             Um copiloto financeiro, não um banco.
           </p>
 
@@ -190,7 +190,7 @@ const Onboarding = () => {
               Simples em 3 passos
             </h2>
             <p className="text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-              Não precisa ser expert em finanças. A Finora faz todo o trabalho pesado por você.
+              Não precisa ser expert em finanças. A Vault faz todo o trabalho pesado por você.
             </p>
           </div>
 
@@ -286,7 +286,7 @@ const Onboarding = () => {
                 </CardHeader>
                 <CardContent>
                   <p className="text-muted-foreground leading-relaxed text-base">
-                    A Finora te avisa no WhatsApp antes do aperto financeiro e sugere exatamente o que fazer. Alertas personalizados baseados no seu perfil.
+                    A Vault te avisa no WhatsApp antes do aperto financeiro e sugere exatamente o que fazer. Alertas personalizados baseados no seu perfil.
                   </p>
                 </CardContent>
               </Card>
@@ -303,7 +303,7 @@ const Onboarding = () => {
               DIFERENCIAIS
             </div>
             <h2 className="text-4xl md:text-6xl font-bold text-foreground mb-6">
-              Por que escolher a Finora?
+              Por que escolher a Vault?
             </h2>
             <p className="text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
               Feito sob medida para MEIs, autônomos e pequenos negócios que precisam de resultados rápidos
@@ -435,7 +435,7 @@ const Onboarding = () => {
             <div className="md:col-span-2 space-y-4">
               <Logo size="md" />
               <p className="text-muted-foreground leading-relaxed max-w-md">
-                A Finora é o copiloto financeiro alimentado por IA que prevê problemas de caixa antes que eles aconteçam. Feito para empreendedores que precisam de respostas rápidas.
+                A Vault é o copiloto financeiro alimentado por IA que prevê problemas de caixa antes que eles aconteçam. Feito para empreendedores que precisam de respostas rápidas.
               </p>
               <div className="flex gap-4 pt-2">
                 <Button variant="ghost" size="sm" className="hover:bg-primary/10">
@@ -492,7 +492,7 @@ const Onboarding = () => {
           {/* Bottom Bar */}
           <div className="pt-8 border-t border-border/40 flex flex-col md:flex-row items-center justify-between gap-4">
             <p className="text-sm text-muted-foreground">
-              © 2025 Finora Finanças. Todos os direitos reservados.
+              © 2025 Vault Finanças. Todos os direitos reservados.
             </p>
             <div className="flex gap-6 text-sm text-muted-foreground">
               <button className="hover:text-foreground transition-colors">Privacidade</button>

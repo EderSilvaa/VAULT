@@ -3,7 +3,7 @@
 ## Passo 1: Acessar Supabase SQL Editor
 
 1. Acesse [https://app.supabase.com](https://app.supabase.com)
-2. Selecione seu projeto Finora Caixa Alerta
+2. Selecione seu projeto Vault Caixa Alerta
 3. No menu lateral, clique em **SQL Editor**
 4. Clique em **New Query**
 

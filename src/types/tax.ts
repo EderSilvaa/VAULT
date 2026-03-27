@@ -1,4 +1,4 @@
-// FINORA TAX - TypeScript Type Definitions
+// VAULT TAX - TypeScript Type Definitions
 
 export type TaxRegime = 'simples_nacional' | 'presumido' | 'real' | 'mei'
 

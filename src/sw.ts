@@ -57,7 +57,7 @@ self.addEventListener('push', (event: PushEvent) => {
   console.log('Push notification received:', event);
 
   let notificationData = {
-    title: 'Finora',
+    title: 'Vault',
     body: 'Você tem uma nova notificação',
     icon: '/pwa-192x192.png',
     badge: '/pwa-192x192.png',

@@ -1,8 +1,8 @@
-# MEI e a Reforma Tributária - Guia Completo FINORA TAX
+# MEI e a Reforma Tributária - Guia Completo VAULT TAX
 
 ## 🎯 Visão Geral
 
-O **MEI (Microempreendedor Individual)** sofrerá mudanças significativas com a Reforma Tributária. Este documento explica como o sistema FINORA TAX está preparado para essas mudanças.
+O **MEI (Microempreendedor Individual)** sofrerá mudanças significativas com a Reforma Tributária. Este documento explica como o sistema VAULT TAX está preparado para essas mudanças.
 
 ---
 
@@ -102,7 +102,7 @@ Algumas atividades de alto valor agregado podem não ser mais permitidas:
 
 ### **1. Limite de Faturamento**
 
-O sistema FINORA TAX cria alertas automáticos:
+O sistema VAULT TAX cria alertas automáticos:
 
 | Percentual | Severidade | Mensagem |
 |------------|------------|----------|
@@ -138,7 +138,7 @@ Você faturou R$ 100.000 em 2025:
 
 ---
 
-## 🛡️ Como o FINORA TAX Protege Você
+## 🛡️ Como o VAULT TAX Protege Você
 
 ### **1. Monitoramento em Tempo Real**
 - ✅ Toda transação de receita é verificada
@@ -192,7 +192,7 @@ SELECT calculate_mei_tax('user_id', 12, 2025);
 
 ## 🚀 Plano de Migração MEI → Simples Nacional
 
-Se você precisar migrar do MEI para Simples Nacional, o FINORA TAX te guia:
+Se você precisar migrar do MEI para Simples Nacional, o VAULT TAX te guia:
 
 ### **Quando Migrar?**
 
@@ -216,7 +216,7 @@ Se você precisar migrar do MEI para Simples Nacional, o FINORA TAX te guia:
    - Anexo III (serviços) - mais comum
    - Anexo I (comércio)
 
-3. **Atualizar no FINORA TAX:**
+3. **Atualizar no VAULT TAX:**
    ```typescript
    // Modal de configuração
    regime: 'simples_nacional'
@@ -285,7 +285,7 @@ Se você precisar migrar do MEI para Simples Nacional, o FINORA TAX te guia:
 
 ### **1. Configurar como MEI**
 ```typescript
-// Modal de configuração FINORA TAX
+// Modal de configuração VAULT TAX
 {
   regime: 'mei',
   iss_rate: 0, // MEI não precisa informar
@@ -321,7 +321,7 @@ Se você precisar migrar do MEI para Simples Nacional, o FINORA TAX te guia:
 
 **Calcular DAS:**
 - App MEI (gov.br)
-- FINORA TAX (cálculo automático)
+- VAULT TAX (cálculo automático)
 
 ---
 
@@ -335,10 +335,10 @@ Se você precisar migrar do MEI para Simples Nacional, o FINORA TAX te guia:
 ---
 
 **Última atualização**: 27/12/2024
-**Versão do sistema**: FINORA TAX 1.0 (com suporte total ao MEI e Reforma Tributária)
+**Versão do sistema**: VAULT TAX 1.0 (com suporte total ao MEI e Reforma Tributária)
 
 ---
 
 ## 💡 Dica Final
 
-> **O MEI é ótimo enquanto você está dentro dos limites.** Quando crescer, migrar para Simples Nacional não é um problema - é uma **conquista**! Significa que seu negócio está crescendo. O FINORA TAX te acompanha nessa jornada.
+> **O MEI é ótimo enquanto você está dentro dos limites.** Quando crescer, migrar para Simples Nacional não é um problema - é uma **conquista**! Significa que seu negócio está crescendo. O VAULT TAX te acompanha nessa jornada.

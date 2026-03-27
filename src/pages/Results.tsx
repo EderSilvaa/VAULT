@@ -185,7 +185,7 @@ const Results = () => {
             Quer receber alertas automáticos?
           </h3>
           <p className="text-white/90">
-            A Finora te avisa antes do aperto e sugere o que fazer
+            A Vault te avisa antes do aperto e sugere o que fazer
           </p>
           <Button 
             variant="outline" 

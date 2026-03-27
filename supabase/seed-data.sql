@@ -1,4 +1,4 @@
--- Seed Data para Testes - Finora Caixa Alerta
+-- Seed Data para Testes - Vault Caixa Alerta
 -- Execute este SQL no Supabase SQL Editor para adicionar dados de exemplo
 
 -- IMPORTANTE: Substitua 'SEU-USER-ID-AQUI' pelo ID do seu usuário

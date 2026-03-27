@@ -1,4 +1,4 @@
-# 📚 Documentação - Finora Caixa Alerta
+# 📚 Documentação - Vault Caixa Alerta
 
 Esta pasta contém toda a documentação técnica do projeto.
 

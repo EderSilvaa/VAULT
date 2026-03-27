@@ -1,4 +1,4 @@
--- Finora - Caixa Alerta Database Schema
+-- Vault - Caixa Alerta Database Schema
 -- Execute este SQL no Supabase SQL Editor
 
 -- Enable UUID extension

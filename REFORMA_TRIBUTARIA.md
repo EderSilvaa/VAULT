@@ -1,8 +1,8 @@
-# FINORA TAX - Conformidade com a Reforma Tributária
+# VAULT TAX - Conformidade com a Reforma Tributária
 
 ## 📋 Visão Geral
 
-O sistema FINORA TAX foi desenvolvido em **conformidade com a Reforma Tributária brasileira** (Lei Complementar 68/2024), preparado para a transição gradual do sistema tributário entre 2026 e 2033.
+O sistema VAULT TAX foi desenvolvido em **conformidade com a Reforma Tributária brasileira** (Lei Complementar 68/2024), preparado para a transição gradual do sistema tributário entre 2026 e 2033.
 
 ---
 
@@ -49,7 +49,7 @@ Se sua receita mensal é **R$ 10.000**:
 
 ---
 
-## ✅ Como o FINORA TAX está Preparado
+## ✅ Como o VAULT TAX está Preparado
 
 ### 1. **Banco de Dados**
 - ✅ Tabela `tax_reform_rates` com alíquotas ano a ano (2026-2033)
@@ -236,4 +236,4 @@ Dúvidas sobre a conformidade tributária?
 ---
 
 **Última atualização**: 27/12/2024
-**Versão do sistema**: FINORA TAX 1.0 (com suporte à Reforma Tributária)
+**Versão do sistema**: VAULT TAX 1.0 (com suporte à Reforma Tributária)

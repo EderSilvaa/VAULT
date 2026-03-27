@@ -13,12 +13,12 @@ const sizes = [
   { size: 32, name: 'favicon-32x32.png' },
 ];
 
-// Use the Finora logo
-const logoPath = join(__dirname, 'src', 'assets', 'logo_finora.jpg');
+// Use the Vault logo
+const logoPath = join(__dirname, 'src', 'assets', 'logo_vault.jpg');
 const publicDir = join(__dirname, 'public');
 
 async function generateIcons() {
-  console.log('🎨 Generating PWA icons from Finora logo...\n');
+  console.log('🎨 Generating PWA icons from Vault logo...\n');
 
   for (const { size, name } of sizes) {
     try {

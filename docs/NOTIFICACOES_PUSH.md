@@ -1,4 +1,4 @@
-# Sistema de Notificações Push - Finora
+# Sistema de Notificações Push - Vault
 
 ## Visão Geral
 

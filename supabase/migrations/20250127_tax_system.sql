@@ -1,4 +1,4 @@
--- FINORA TAX SYSTEM
+-- VAULT TAX SYSTEM
 -- Sistema completo de gestão tributária com cálculo automático, alertas e otimização AI
 
 -- ============================================================

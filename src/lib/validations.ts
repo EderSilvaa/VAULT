@@ -1,4 +1,4 @@
-// Zod Validation Schemas - Finora Caixa Alerta
+// Zod Validation Schemas - Vault Caixa Alerta
 import { z } from 'zod'
 
 // Transaction schemas

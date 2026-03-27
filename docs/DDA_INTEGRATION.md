@@ -1,4 +1,4 @@
-# 💳 DDA (Débito Direto Autorizado) - Integração Finora
+# 💳 DDA (Débito Direto Autorizado) - Integração Vault
 
 ## 🎯 O Que É DDA?
 
@@ -22,7 +22,7 @@ Cliente visualiza e autoriza pagamento
 
 ---
 
-## 🔥 Por Que DDA É IMPORTANTE para o Finora?
+## 🔥 Por Que DDA É IMPORTANTE para o Vault?
 
 Seu sócio está **100% CERTO**! DDA é complementar ao Open Finance e resolve um problema específico:
 
@@ -36,7 +36,7 @@ Seu sócio está **100% CERTO**! DDA é complementar ao Open Finance e resolve u
 
 ### ✅ Solução com DDA:
 
-**Finora + DDA:**
+**Vault + DDA:**
 - Puxa **TODOS os boletos** automaticamente
 - Centraliza em um só lugar
 - Alerta vencimentos próximos
@@ -52,7 +52,7 @@ Seu sócio está **100% CERTO**! DDA é complementar ao Open Finance e resolve u
 | **O que faz** | Sincroniza transações bancárias já realizadas | Apresenta boletos a pagar |
 | **Tipo de dado** | Histórico de receitas/despesas | Contas a pagar futuras |
 | **Direção** | PASSADO → Presente | Presente → FUTURO |
-| **Uso no Finora** | Preencher transações passadas | Prever despesas futuras |
+| **Uso no Vault** | Preencher transações passadas | Prever despesas futuras |
 | **Benefício** | Projeção baseada em histórico | Alertas de vencimentos |
 | **Regulação** | Banco Central (Open Finance) | FEBRABAN (DDA) |
 | **Cobertura** | Todos os bancos | Todos os bancos |
@@ -70,7 +70,7 @@ PREVISÃO COMPLETA DE FLUXO DE CAIXA! 🚀
 
 ---
 
-## 💡 Como DDA Turbina o Finora
+## 💡 Como DDA Turbina o Vault
 
 ### Use Case Real:
 
@@ -79,12 +79,12 @@ PREVISÃO COMPLETA DE FLUXO DE CAIXA! 🚀
 **Sem DDA:**
 - João recebe 15 boletos/mês por email
 - Fornecedores, aluguel, energia, água, internet...
-- Ele anota tudo manualmente no Finora
+- Ele anota tudo manualmente no Vault
 - Esquece um boleto → paga juros
 - Fluxo de caixa sempre desatualizado
 
 **Com DDA:**
-- Finora conecta no banco via DDA
+- Vault conecta no banco via DDA
 - Puxa **automaticamente** os 15 boletos
 - Mostra no Dashboard: "Você tem R$ 8.500 em boletos vencendo esta semana"
 - Alerta: "Em 3 dias seu caixa não terá saldo para pagar tudo!"
@@ -95,7 +95,7 @@ PREVISÃO COMPLETA DE FLUXO DE CAIXA! 🚀
 
 ## 🏗️ Arquitetura DDA + Open Finance
 
-### Fluxo Completo no Finora:
+### Fluxo Completo no Vault:
 
 ```
 ┌─────────────────────────────────────────────┐
@@ -115,7 +115,7 @@ PREVISÃO COMPLETA DE FLUXO DE CAIXA! 🚀
      │                 │
      ↓                 ↓
 ┌──────────────────────────────┐
-│    FINORA BACKEND            │
+│    VAULT BACKEND            │
 │   (Supabase Functions)       │
 └──────────┬───────────────────┘
            │
@@ -128,7 +128,7 @@ PREVISÃO COMPLETA DE FLUXO DE CAIXA! 🚀
           │
           ↓
 ┌─────────────────────────────┐
-│  DASHBOARD FINORA           │
+│  DASHBOARD VAULT           │
 ├─────────────────────────────┤
 │ ✅ Transações (Pluggy)      │
 │ ✅ Boletos a Pagar (DDA)    │
@@ -225,11 +225,11 @@ Descobri que o Pluggy, além de Open Finance, **TAMBÉM TEM DDA** na mesma API!
 - ✅ Mesma SDK
 - ✅ Dashboard único
 
-**Isso é PERFEITO para o Finora!** 🎉
+**Isso é PERFEITO para o Vault!** 🎉
 
 ---
 
-## 💻 Implementação DDA no Finora
+## 💻 Implementação DDA no Vault
 
 ### Fase 1: Setup com TecnoSpeed (ou Pluggy)
 
@@ -744,7 +744,7 @@ TOTAL ESTIMADO: R$ 4.500/mês
 
 ---
 
-**DDA + Open Finance = FINORA COMPLETO!** 🚀
+**DDA + Open Finance = VAULT COMPLETO!** 🚀
 
 Seu sócio mandou muito bem na sugestão. Com DDA, você tem:
 - ✅ Passado (transações do Open Finance)

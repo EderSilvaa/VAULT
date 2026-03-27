@@ -1,4 +1,4 @@
--- REFORMA TRIBUTÁRIA - Adequação do sistema FINORA TAX
+-- REFORMA TRIBUTÁRIA - Adequação do sistema VAULT TAX
 -- Preparação para IBS/CBS (Lei Complementar 68/2024)
 -- Transição gradual: 2026-2033
 

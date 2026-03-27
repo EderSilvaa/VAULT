@@ -27,7 +27,7 @@
 
 1. **Acesse**: https://platform.openai.com/api-keys
 2. Clique em **"Create new secret key"**
-3. **Dê um nome**: "Finora AI"
+3. **Dê um nome**: "Vault AI"
 4. **COPIE A KEY AGORA!** (só aparece uma vez)
    - Formato: `sk-proj-...` (começa com sk-)
 
@@ -84,7 +84,7 @@ Acesse http://localhost:8080 e você deve ver insights de IA sendo gerados!
 
 - Novos usuários ganham **$5 de crédito grátis**
 - Válido por 3 meses
-- Suficiente para testar o Finora!
+- Suficiente para testar o Vault!
 
 ## ❓ Troubleshooting
 
@@ -102,7 +102,7 @@ Acesse http://localhost:8080 e você deve ver insights de IA sendo gerados!
 - ✅ Adicione método de pagamento
 - ✅ Verifique billing: https://platform.openai.com/account/billing
 
-## 🎯 Funcionalidades do Finora com IA
+## 🎯 Funcionalidades do Vault com IA
 
 Com a API configurada, você terá:
 

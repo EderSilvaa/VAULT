@@ -25,7 +25,7 @@ Esta funcionalidade transforma dados financeiros em relatórios profissionais fo
 
 ### 1. **Exportação em PDF**
 - ✅ Geração instantânea de PDF profissional
-- ✅ Design premium com cores do tema Finora
+- ✅ Design premium com cores do tema Vault
 - ✅ KPIs em cards visuais (Saldo, Receitas, Despesas, Economia)
 - ✅ Lista completa de transações (últimas 20)
 - ✅ Metas financeiras com barras de progresso
@@ -237,7 +237,7 @@ const prepareExportData = (): ExportData => {
 ```
 ┌─────────────────────────────────────┐
 │ HEADER (Azul Indigo)                │
-│ Logo Finora | Relatório Financeiro  │
+│ Logo Vault | Relatório Financeiro  │
 └─────────────────────────────────────┘
 
 ┌─────────────────────────────────────┐
@@ -290,8 +290,8 @@ INSIGHTS DE IA
   • Antecipar recebível Cliente Y
 
 ┌─────────────────────────────────────┐
-│ Página 1 de 2 | Finora - Caixa      │
-│ Alerta | finora.com.br               │
+│ Página 1 de 2 | Vault - Caixa      │
+│ Alerta | vault.com.br               │
 └─────────────────────────────────────┘
 ```
 
@@ -332,7 +332,7 @@ const colors = {
 5. PDF será baixado automaticamente
 
 **Resultado esperado:**
-- ✅ PDF baixado com nome `finora-relatorio-2025-11-17.pdf`
+- ✅ PDF baixado com nome `vault-relatorio-2025-11-17.pdf`
 - ✅ Arquivo abre sem erros
 - ✅ Dados corretos e formatados
 - ✅ Visual profissional com cores do tema
@@ -384,7 +384,7 @@ serve(async (req) => {
 
     // Enviar email com PDF anexado
     const { data, error } = await resend.emails.send({
-      from: 'Finora <noreply@finora.com.br>',
+      from: 'Vault <noreply@vault.com.br>',
       to: email,
       subject: `Relatório Financeiro - ${reportData.periodStart} a ${reportData.periodEnd}`,
       html: `
@@ -399,12 +399,12 @@ serve(async (req) => {
           <li>Despesas: R$ ${reportData.totalExpenses.toFixed(2)}</li>
         </ul>
         <p>Acesse o dashboard para mais detalhes:
-           <a href="https://finora.vercel.app/dashboard">Finora Dashboard</a>
+           <a href="https://vault.vercel.app/dashboard">Vault Dashboard</a>
         </p>
       `,
       attachments: [
         {
-          filename: 'finora-relatorio.pdf',
+          filename: 'vault-relatorio.pdf',
           content: pdfBase64,
         },
       ],

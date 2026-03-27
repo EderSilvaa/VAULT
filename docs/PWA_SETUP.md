@@ -1,13 +1,13 @@
-# PWA (Progressive Web App) - Finora
+# PWA (Progressive Web App) - Vault
 
-A Finora agora é um **Progressive Web App (PWA)** completo! 🎉
+A Vault agora é um **Progressive Web App (PWA)** completo! 🎉
 
 ## ✨ Recursos PWA Implementados
 
 ✅ **Instalação no dispositivo** - Funciona como app nativo
 ✅ **Funcionalidade offline** - Acesso mesmo sem internet
 ✅ **Cache inteligente** - Carregamento rápido
-✅ **Ícones personalizados** - Logo Finora em todos os tamanhos
+✅ **Ícones personalizados** - Logo Vault em todos os tamanhos
 ✅ **Splash screen** - Experiência profissional
 ✅ **Service Worker** - Workbox para cache otimizado
 
@@ -19,13 +19,13 @@ A Finora agora é um **Progressive Web App (PWA)** completo! 🎉
 
 1. Acesse a aplicação no navegador
 2. Procure o ícone ➕ ou **"Instalar"** na barra de endereço
-3. Clique em **"Instalar Finora"**
+3. Clique em **"Instalar Vault"**
 4. O app será instalado e abrirá em janela própria
 5. Um atalho será criado na área de trabalho
 
 ### No Mobile (Android):
 
-1. Abra a Finora no Chrome
+1. Abra a Vault no Chrome
 2. Toque no menu (⋮) → **"Adicionar à tela inicial"**
 3. Toque em **"Adicionar"**
 4. O ícone aparecerá na home screen
@@ -33,7 +33,7 @@ A Finora agora é um **Progressive Web App (PWA)** completo! 🎉
 
 ### No iOS (Safari):
 
-1. Abra a Finora no Safari
+1. Abra a Vault no Safari
 2. Toque no botão de **compartilhar** (□↑)
 3. Role e toque em **"Adicionar à Tela de Início"**
 4. Toque em **"Adicionar"**
@@ -63,7 +63,7 @@ A Finora agora é um **Progressive Web App (PWA)** completo! 🎉
 1. Abra DevTools (F12)
 2. Vá em **Application** → **Manifest**
 3. Verifique:
-   - Nome: **Finora - Caixa Alerta**
+   - Nome: **Vault - Caixa Alerta**
    - Cor do tema: **#8B5CF6** (roxo)
    - Ícones: **192x192** e **512x512**
    - Display mode: **standalone**
@@ -80,7 +80,7 @@ A Finora agora é um **Progressive Web App (PWA)** completo! 🎉
 
 ## 🎨 Ícones PWA
 
-Os ícones foram gerados automaticamente a partir do logo da Finora:
+Os ícones foram gerados automaticamente a partir do logo da Vault:
 
 - **pwa-192x192.png** - Android, Chrome
 - **pwa-512x512.png** - Android splash, desktop
@@ -106,8 +106,8 @@ Se precisar alterar o logo:
 
 ```json
 {
-  "name": "Finora - Caixa Alerta",
-  "short_name": "Finora",
+  "name": "Vault - Caixa Alerta",
+  "short_name": "Vault",
   "description": "Gestão financeira inteligente com IA",
   "theme_color": "#8B5CF6",
   "background_color": "#ffffff",
@@ -274,4 +274,4 @@ Teste o PWA no ambiente de produção antes de fazer deploy.
 
 ---
 
-Agora a Finora funciona como um app nativo! 🎉
+Agora a Vault funciona como um app nativo! 🎉

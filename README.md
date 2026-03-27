@@ -1,12 +1,12 @@
-# Finora - Caixa Alerta
+# Vault - Caixa Alerta
 
 <div align="center">
 
-  ![Finora Logo](https://img.shields.io/badge/Finora-Caixa%20Alerta-6366f1?style=for-the-badge)
+  ![Vault Logo](https://img.shields.io/badge/Vault-Caixa%20Alerta-6366f1?style=for-the-badge)
 
   **Plataforma inteligente de gestão e previsão de fluxo de caixa com IA**
 
-  [Demo](#) • [Documentação](#) • [Reportar Bug](https://github.com/seu-usuario/finora-caixa-alerta/issues) • [Solicitar Feature](https://github.com/seu-usuario/finora-caixa-alerta/issues)
+  [Demo](#) • [Documentação](#) • [Reportar Bug](https://github.com/seu-usuario/vault-caixa-alerta/issues) • [Solicitar Feature](https://github.com/seu-usuario/vault-caixa-alerta/issues)
 
 </div>
 
@@ -14,7 +14,7 @@
 
 ## Sobre o Projeto
 
-**Finora - Caixa Alerta** é uma plataforma de gestão financeira empresarial que utiliza inteligência artificial para prever o fluxo de caixa, identificar padrões de despesas e receitas, e fornecer insights acionáveis para evitar problemas de liquidez.
+**Vault - Caixa Alerta** é uma plataforma de gestão financeira empresarial que utiliza inteligência artificial para prever o fluxo de caixa, identificar padrões de despesas e receitas, e fornecer insights acionáveis para evitar problemas de liquidez.
 
 ### Principais Funcionalidades
 
@@ -111,8 +111,8 @@ nvm use --lts
 
 1. **Clone o repositório**
 ```bash
-git clone https://github.com/seu-usuario/finora-caixa-alerta.git
-cd finora-caixa-alerta
+git clone https://github.com/seu-usuario/vault-caixa-alerta.git
+cd vault-caixa-alerta
 ```
 
 2. **Instale as dependências**
@@ -153,7 +153,7 @@ npm run preview      # Preview do build de produção
 ## Estrutura do Projeto
 
 ```
-finora-caixa-alerta/
+vault-caixa-alerta/
 ├── src/
 │   ├── components/        # Componentes React
 │   │   ├── ui/           # Componentes de UI (shadcn)
@@ -299,9 +299,9 @@ Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para ma
 
 ## Contato
 
-**Insta** - [@finorasolucoes]
+**Insta** - [@vaultsolucoes]
 
-Link do Projeto: [https://github.com/seu-usuario/finora-caixa-alerta](https://github.com/seu-usuario/finora-caixa-alerta)
+Link do Projeto: [https://github.com/seu-usuario/vault-caixa-alerta](https://github.com/seu-usuario/vault-caixa-alerta)
 
 ---
 

@@ -10,7 +10,7 @@ Guia passo a passo para configurar no Supabase Dashboard (sem CLI)
 
 1. Acesse: https://supabase.com/dashboard
 2. Faça login
-3. Selecione o projeto: **finora-caixa-alerta** (`ixcjeoibvhkdhqitkbat`)
+3. Selecione o projeto: **vault-caixa-alerta** (`ixcjeoibvhkdhqitkbat`)
 4. No menu lateral esquerdo, clique em **SQL Editor**
 5. Clique em **New Query** (botão verde)
 

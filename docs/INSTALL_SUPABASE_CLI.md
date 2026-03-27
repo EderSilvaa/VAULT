@@ -58,7 +58,7 @@ Isso vai abrir o navegador para você fazer login. Após login, um token será s
 
 ```bash
 # No diretório do projeto
-cd c:\Users\EDER\finora-caixa-alerta
+cd c:\Users\EDER\vault-caixa-alerta
 
 # Linkar com o projeto remoto
 supabase link --project-ref ixcjeoibvhkdhqitkbat

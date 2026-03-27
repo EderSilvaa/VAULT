@@ -1,4 +1,4 @@
-// Application Types - Finora Caixa Alerta
+// Application Types - Vault Caixa Alerta
 
 export interface User {
   id: string

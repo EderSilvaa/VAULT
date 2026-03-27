@@ -95,8 +95,8 @@ class ExportService {
     const margin = 20;
     let yPos = margin;
 
-    // Cores do tema Finora (convertidas de HSL para RGB)
-    const primaryColor: [number, number, number] = [140, 35, 245]; // Roxo Finora (HSL 270 75% 55%)
+    // Cores do tema Vault (convertidas de HSL para RGB)
+    const primaryColor: [number, number, number] = [140, 35, 245]; // Roxo Vault (HSL 270 75% 55%)
     const secondaryColor: [number, number, number] = [103, 46, 161]; // Roxo escuro (HSL 270 60% 45%)
     const successColor: [number, number, number] = [22, 163, 74]; // Verde (HSL 142 76% 36%)
     const warningColor: [number, number, number] = [245, 158, 11]; // Amarelo (HSL 38 92% 50%)
@@ -112,7 +112,7 @@ class ExportService {
     pdf.setTextColor(255, 255, 255);
     pdf.setFontSize(24);
     pdf.setFont('helvetica', 'bold');
-    pdf.text('Finora', margin, 20);
+    pdf.text('Vault', margin, 20);
 
     pdf.setFontSize(12);
     pdf.setFont('helvetica', 'normal');
@@ -596,7 +596,7 @@ class ExportService {
       pdf.setFontSize(8);
       pdf.setTextColor(150, 150, 150);
       pdf.text(
-        `Página ${i} de ${totalPages} | Finora - Caixa Alerta | finora.com.br`,
+        `Página ${i} de ${totalPages} | Vault - Caixa Alerta | vault.com.br`,
         pageWidth / 2,
         pageHeight - 10,
         { align: 'center' }
@@ -653,7 +653,7 @@ class ExportService {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `finora-relatorio-${format(new Date(), 'yyyy-MM-dd')}.pdf`;
+    link.download = `vault-relatorio-${format(new Date(), 'yyyy-MM-dd')}.pdf`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

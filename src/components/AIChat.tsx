@@ -39,7 +39,7 @@ export function AIChat({ onSimulate }: AIChatProps) {
             setMessages([
                 {
                     role: 'assistant',
-                    content: 'Olá! Sou o Finora AI. Posso simular cenários futuros ou registrar transações para você via chat. Como posso ajudar?'
+                    content: 'Olá! Sou o Vault AI. Posso simular cenários futuros ou registrar transações para você via chat. Como posso ajudar?'
                 }
             ])
         }
@@ -233,7 +233,7 @@ export function AIChat({ onSimulate }: AIChatProps) {
                     </div>
                     <div>
                         <CardTitle className="flex items-center gap-2">
-                            Finora Chat
+                            Vault Chat
                             <span className="text-xs font-normal px-2 py-0.5 rounded-full bg-primary/10 text-primary">Beta</span>
                         </CardTitle>
                         <CardDescription>

@@ -1,4 +1,4 @@
-// Database Types - Finora Caixa Alerta
+// Database Types - Vault Caixa Alerta
 // Generated types for Supabase tables
 
 export type Json =
