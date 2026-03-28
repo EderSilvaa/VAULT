@@ -25,7 +25,6 @@ import { SmartGoals } from "@/components/SmartGoals";
 import { CreateGoalModal } from "@/components/CreateGoalModal";
 import { ExportReport } from "@/components/ExportReport";
 import { AlertsCenter } from "@/components/AlertsCenter";
-import { NotificationSettings } from "@/components/NotificationSettings";
 import { useSmartGoals } from "@/hooks/useSmartGoals";
 import { aiService } from "@/services/ai.service";
 import { supabase } from "@/lib/supabase";
@@ -104,7 +103,6 @@ const Dashboard = () => {
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [showIncomeModal, setShowIncomeModal] = useState(false);
   const [showCreateGoal, setShowCreateGoal] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
   const [showAIAnalysis, setShowAIAnalysis] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiAnalysisComplete, setAiAnalysisComplete] = useState(false);
@@ -291,7 +289,6 @@ const Dashboard = () => {
 
               <p className="px-3 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Conta</p>
               <MenuItem icon={User} label="Perfil" onClick={() => { navigate('/profile'); setSidebarOpen(false); }} />
-              <MenuItem icon={Bell} label="Notificações" onClick={() => { setShowNotifications(true); setSidebarOpen(false); }} />
               <MenuItem icon={Settings} label="Configurações" onClick={() => { setSidebarOpen(false); }} />
             </nav>
 
@@ -665,16 +662,6 @@ const Dashboard = () => {
         monthlyExpenses={totalExpenses}
       />
 
-      {/* Notifications Modal */}
-      <Dialog open={showNotifications} onOpenChange={setShowNotifications}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Bell className="h-5 w-5" /> Notificações</DialogTitle>
-            <DialogDescription>Configure quando receber notificações</DialogDescription>
-          </DialogHeader>
-          <NotificationSettings />
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };

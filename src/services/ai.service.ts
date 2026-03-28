@@ -182,18 +182,9 @@ export const aiService = {
     const expenses = transactions?.filter(t => t.type === 'expense').reduce((sum, t) => sum + Number(t.amount), 0) || 0
     const currentBalance = income - expenses
 
-    // Get bank accounts
-    const { data: bankAccounts } = await supabase
-      .from('bank_accounts' as any)
-      .select('*')
-      .eq('user_id', userId) as { data: any[] | null, error: any }
-
-    const totalBankBalance = bankAccounts?.reduce((sum, acc) => sum + Number(acc.balance), 0) || 0
-
     return {
       transactions: transactions || [],
       currentBalance,
-      totalBankBalance,
       income,
       expenses,
       period: {
@@ -354,36 +345,6 @@ Analise JSON:
       .sort((a, b) => b[1].total - a[1].total)
       .map(([cat, data]) => `- ${cat}: R$ ${data.total.toFixed(2)} (${data.count} transações)`)
       .join('\n')
-  },
-
-  /**
-   * Save insights to Supabase ai_insights table
-   * Note: This is the old system. The new system uses ai_alerts table (Edge Function)
-   */
-  async saveInsights(userId: string, insights: AIInsight[]) {
-    try {
-      const insightsToSave = insights.map(insight => ({
-        user_id: userId,
-        insight_type: (insight as any).type,
-        title: insight.title,
-        description: insight.description,
-        action: (insight as any).action,
-        is_read: false
-      }))
-
-      const { error } = await supabase
-        .from('ai_insights' as any)
-        .insert(insightsToSave as any)
-
-      if (error) {
-        console.log('[AI] Note: ai_insights table not available (using new system instead)')
-      } else {
-        console.log('[AI] Saved', insightsToSave.length, 'insights to database')
-      }
-    } catch (error) {
-      // Silently fail - this is fine, we're moving to the new system
-      console.log('[AI] Insights not saved (migrating to new system)')
-    }
   },
 
   /**

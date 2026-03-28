@@ -41,7 +41,6 @@ export function useTransactions(userId: string | undefined) {
       queryClient.invalidateQueries({ queryKey: ['transactions', userId] })
       queryClient.invalidateQueries({ queryKey: ['monthly-stats', userId] })
       queryClient.invalidateQueries({ queryKey: ['current-balance', userId] })
-      queryClient.invalidateQueries({ queryKey: ['projections', userId] })
       queryClient.invalidateQueries({ queryKey: ['transaction-stats', userId] })
 
       toast({
@@ -66,7 +65,6 @@ export function useTransactions(userId: string | undefined) {
       queryClient.invalidateQueries({ queryKey: ['transactions', userId] })
       queryClient.invalidateQueries({ queryKey: ['monthly-stats', userId] })
       queryClient.invalidateQueries({ queryKey: ['current-balance', userId] })
-      queryClient.invalidateQueries({ queryKey: ['projections', userId] })
       queryClient.invalidateQueries({ queryKey: ['transaction-stats', userId] })
 
       toast({
