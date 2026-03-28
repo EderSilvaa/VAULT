@@ -34,8 +34,8 @@ export const parseCSV = (file: File): Promise<ImportedTransaction[]> => {
               try {
                 // Handle DD/MM/YYYY format (common in Brazilian exports)
                 if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateRaw)) {
-                  const [d, m, y] = dateRaw.split('/')
-                  date = new Date(`${y}-${m}-${d}`).toISOString()
+                  const [d, mo, y] = dateRaw.split('/')
+                  date = new Date(`${y}-${mo}-${d}`).toISOString()
                 } else {
                   date = new Date(dateRaw).toISOString()
                 }
@@ -172,8 +172,8 @@ export const parseXLSX = async (file: File): Promise<ImportedTransaction[]> => {
           const d = new Date(excelEpoch.getTime() + dateRaw * 86400000)
           date = d.toISOString()
         } else if (/^\d{2}\/\d{2}\/\d{4}$/.test(String(dateRaw))) {
-          const [d, m, y] = String(dateRaw).split('/')
-          date = new Date(`${y}-${m}-${d}`).toISOString()
+          const [d, mo, y] = String(dateRaw).split('/')
+          date = new Date(`${y}-${mo}-${d}`).toISOString()
         } else {
           date = new Date(dateRaw).toISOString()
         }
