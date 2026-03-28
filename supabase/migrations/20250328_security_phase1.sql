@@ -209,7 +209,10 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- ============================================================
 
 -- Drop and recreate with restricted columns and row-level filter
-CREATE OR REPLACE VIEW expiring_consents AS
+-- security_invoker = true: view runs with the querying user's permissions (not creator's),
+-- so RLS policies on bank_connections are evaluated for the actual caller.
+DROP VIEW IF EXISTS expiring_consents;
+CREATE VIEW expiring_consents WITH (security_invoker = true) AS
 SELECT
   bc.id,
   bc.user_id,
