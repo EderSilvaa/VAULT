@@ -52,70 +52,6 @@ export function useAIAnalysis() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!user) {
-      setLoading(false);
-      return;
-    }
-
-    loadLatestAnalysis();
-    loadAlerts();
-
-    // Subscribe to new analyses
-    const analysisChannel = supabase
-      .channel('ai-analysis-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'ai_analysis_results',
-          filter: `user_id=eq.${user.id}`,
-        },
-        () => {
-          console.log('[useAIAnalysis] New analysis detected, reloading...');
-          loadLatestAnalysis();
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'ai_analysis_results',
-          filter: `user_id=eq.${user.id}`,
-        },
-        () => {
-          console.log('[useAIAnalysis] Analysis updated, reloading...');
-          loadLatestAnalysis();
-        }
-      )
-      .subscribe();
-
-    // Subscribe to new alerts
-    const alertsChannel = supabase
-      .channel('ai-alerts-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'ai_alerts',
-          filter: `user_id=eq.${user.id}`,
-        },
-        () => {
-          console.log('[useAIAnalysis] Alerts changed, reloading...');
-          loadAlerts();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      analysisChannel.unsubscribe();
-      alertsChannel.unsubscribe();
-    };
-  }, [user, loadLatestAnalysis, loadAlerts]);
-
   const loadLatestAnalysis = useCallback(async () => {
     if (!user) return;
 
@@ -196,6 +132,70 @@ export function useAIAnalysis() {
       console.error('[useAIAnalysis] Error loading alerts:', err);
     }
   }, [user]);
+
+  useEffect(() => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
+    loadLatestAnalysis();
+    loadAlerts();
+
+    // Subscribe to new analyses
+    const analysisChannel = supabase
+      .channel('ai-analysis-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'ai_analysis_results',
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => {
+          console.log('[useAIAnalysis] New analysis detected, reloading...');
+          loadLatestAnalysis();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'ai_analysis_results',
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => {
+          console.log('[useAIAnalysis] Analysis updated, reloading...');
+          loadLatestAnalysis();
+        }
+      )
+      .subscribe();
+
+    // Subscribe to new alerts
+    const alertsChannel = supabase
+      .channel('ai-alerts-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'ai_alerts',
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => {
+          console.log('[useAIAnalysis] Alerts changed, reloading...');
+          loadAlerts();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      analysisChannel.unsubscribe();
+      alertsChannel.unsubscribe();
+    };
+  }, [user, loadLatestAnalysis, loadAlerts]);
 
   const refreshAnalysis = useCallback(() => {
     setLoading(true);
