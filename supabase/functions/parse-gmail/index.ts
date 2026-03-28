@@ -18,14 +18,74 @@ interface ParsedTransaction {
 // Gmail search query
 // ──────────────────────────────────────────────────────────────────────
 const SEARCH_TERMS = [
+  // NF-e / Nota Fiscal
   'subject:"nota fiscal"', 'subject:"NF-e"', 'subject:"NFe"',
-  'subject:"PIX recebido"', 'subject:"PIX enviado"',
-  'subject:"Pix recebido"', 'subject:"Pix enviado"',
+  'subject:"nfe emitida"', 'subject:"nota fiscal emitida"',
+
+  // PIX — variações de bancos brasileiros
+  'subject:"pix"',
+  'subject:"você recebeu um pix"', 'subject:"você fez um pix"',
+  'subject:"voce recebeu um pix"', 'subject:"voce fez um pix"',
+  'subject:"recebeu um pix"', 'subject:"enviou um pix"',
+  'subject:"pix recebido"', 'subject:"pix enviado"',
+  'subject:"transferência pix"', 'subject:"transferencia pix"',
+
+  // Boleto
+  'subject:"boleto"', 'subject:"boleto pago"', 'subject:"boleto compensado"',
+  'subject:"boleto vencendo"', 'subject:"vencimento do boleto"',
+
+  // Pagamento / Transferência
   'subject:"pagamento confirmado"', 'subject:"pagamento recebido"',
-  'subject:"boleto pago"', 'subject:"boleto compensado"',
-  'subject:"comprovante de transferência"',
+  'subject:"pagamento efetuado"', 'subject:"pagamento aprovado"',
+  'subject:"comprovante de pagamento"', 'subject:"comprovante de transferência"',
+  'subject:"comprovante de transferencia"',
   'subject:"transferência recebida"', 'subject:"transferência enviada"',
-  'subject:"fatura"', 'subject:"extrato"',
+  'subject:"transferencia recebida"', 'subject:"transferencia enviada"',
+  'subject:"você recebeu"', 'subject:"voce recebeu"',
+
+  // Fatura / Extrato
+  'subject:"sua fatura"', 'subject:"fatura chegou"', 'subject:"fatura do cartão"',
+  'subject:"fatura do cartao"', 'subject:"extrato"',
+  'subject:"fechamento da fatura"',
+
+  // Bancos / Fintechs específicos
+  'subject:"nubank"', 'subject:"inter"', 'subject:"itaú"', 'subject:"bradesco"',
+  'subject:"santander"', 'subject:"caixa"', 'subject:"sicoob"', 'subject:"sicredi"',
+  'subject:"mercado pago"', 'subject:"pagseguro"', 'subject:"paypal"',
+  'subject:"picpay"', 'subject:"c6 bank"', 'subject:"next"', 'subject:"neon"',
+
+  // Cobrança / Recebimento
+  'subject:"cobrança"', 'subject:"cobranca"',
+  'subject:"recebimento"', 'subject:"crédito em conta"', 'subject:"credito em conta"',
+  'subject:"débito em conta"', 'subject:"debito em conta"',
+
+  // Repasse / Marketplace
+  'subject:"repasse"', 'subject:"pagamento do pedido"',
+
+  // Dívidas / Empréstimos / Financiamentos
+  'subject:"parcela"', 'subject:"parcelamento"',
+  'subject:"empréstimo"', 'subject:"emprestimo"',
+  'subject:"financiamento"', 'subject:"carnê"', 'subject:"carne"',
+  'subject:"dívida"', 'subject:"divida"',
+  'subject:"cobrança"', 'subject:"cobranca"',
+  'subject:"negativação"', 'subject:"negativacao"',
+  'subject:"acordo"', 'subject:"renegociação"', 'subject:"renegociacao"',
+  'subject:"serasa"', 'subject:"spc"', 'subject:"protestado"',
+  'subject:"vencimento"', 'subject:"prazo de pagamento"',
+  'subject:"segunda via"', 'subject:"2 via"',
+
+  // Cartão de crédito
+  'subject:"cartão de crédito"', 'subject:"cartao de credito"',
+  'subject:"limite"', 'subject:"fatura mínima"', 'subject:"fatura minima"',
+  'subject:"pagamento mínimo"',
+
+  // Aluguel / Condomínio
+  'subject:"aluguel"', 'subject:"condomínio"', 'subject:"condominio"',
+  'subject:"iptu"', 'subject:"ipva"',
+
+  // Serviços recorrentes
+  'subject:"assinatura"', 'subject:"renovação"', 'subject:"renovacao"',
+  'subject:"mensalidade"', 'subject:"plano"',
 ]
 const GMAIL_QUERY = SEARCH_TERMS.join(' OR ')
 
@@ -177,6 +237,9 @@ function detectType(subject: string, body: string): 'income' | 'expense' {
     'enviado', 'debitad', 'pago', 'pagamento efetuado', 'débito',
     'pix enviado', 'transferência enviada', 'boleto pago',
     'compra aprovada', 'fatura', 'cobrança', 'débito em conta',
+    'parcela', 'vencimento', 'empréstimo', 'financiamento',
+    'carnê', 'dívida', 'negativação', 'serasa', 'mensalidade',
+    'assinatura', 'aluguel', 'condomínio', 'segunda via',
   ]
   const inc = incomeSignals.filter(s => combined.includes(s)).length
   const exp = expenseSignals.filter(s => combined.includes(s)).length
@@ -188,10 +251,13 @@ function detectType(subject: string, body: string): 'income' | 'expense' {
 // ──────────────────────────────────────────────────────────────────────
 function detectCategory(text: string): string {
   const t = text.toLowerCase()
-  if (/aluguel|locação|condomínio/.test(t)) return 'Fixo'
+  if (/aluguel|locação|condomínio|iptu|ipva/.test(t)) return 'Fixo'
   if (/energia|luz|água|internet|telefone|gás|celular/.test(t)) return 'Utilidades'
+  if (/empréstimo|financiamento|parcela|carnê|dívida|renegoci|serasa|spc|negativação/.test(t)) return 'Dívidas'
+  if (/cartão de crédito|fatura mínima|pagamento mínimo/.test(t)) return 'Dívidas'
+  if (/assinatura|mensalidade|renovação|plano/.test(t)) return 'Fixo'
   if (/fornecedor|material|insumo|compra de produto/.test(t)) return 'Fornecedores'
-  if (/cliente|serviço prestado|venda|receita/.test(t)) return 'Vendas'
+  if (/cliente|serviço prestado|venda|receita|repasse/.test(t)) return 'Vendas'
   if (/salário|prolabore|pró-labore|funcionário|folha/.test(t)) return 'Pessoal'
   if (/imposto|das|simples|inss|irpj|cofins|pis|iss/.test(t)) return 'Impostos'
   if (/manutenção|reparo|conserto/.test(t)) return 'Manutenção'
