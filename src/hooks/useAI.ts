@@ -17,13 +17,6 @@ export function useAI() {
   // Check if AI is configured
   const isConfigured = aiService.isConfigured()
 
-  // Load latest analysis from database on mount
-  useEffect(() => {
-    if (user?.id) {
-      loadLatestAnalysisFromDB()
-    }
-  }, [user?.id, loadLatestAnalysisFromDB])
-
   // Load latest analysis from database
   const loadLatestAnalysisFromDB = useCallback(async () => {
     if (!user?.id) {
@@ -117,6 +110,13 @@ export function useAI() {
       console.error('[useAI] Error loading from database:', err)
     }
   }, [user?.id])
+
+  // Load latest analysis from database on mount
+  useEffect(() => {
+    if (user?.id) {
+      loadLatestAnalysisFromDB()
+    }
+  }, [user?.id, loadLatestAnalysisFromDB])
 
   // Generate financial insights
   const generateInsights = useCallback(async () => {
