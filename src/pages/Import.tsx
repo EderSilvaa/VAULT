@@ -38,20 +38,55 @@ const Import = () => {
   const { user } = useAuth()
   const { createTransactions } = useTransactions(user?.id)
 
+  const ACCEPTED_EXTENSIONS = ['.csv', '.ofx', '.xlsx', '.xls']
+
+  const handleConnectGmail = async () => {
+    try {
+      await gmailService.connectGmail()
+    } catch (err: any) {
+      toast({ title: 'Erro ao conectar Gmail', description: err.message, variant: 'destructive' })
+    }
+  }
+
+  const handleGmailScan = async () => {
+    setIsScanningGmail(true)
+    try {
+      const { transactions, scanned } = await gmailService.parseEmails(user?.id ?? '', 90)
+      setGmailScanned(scanned)
+
+      if (transactions.length === 0) {
+        toast({
+          title: 'Nenhuma transação encontrada',
+          description: `Verificamos ${scanned} e-mails nos últimos 90 dias sem encontrar valores financeiros reconhecíveis.`,
+        })
+        setIsScanningGmail(false)
+        return
+      }
+
+      setParsedTransactions(transactions)
+      setSelectedIds(new Set(transactions.map((_, i) => i)))
+      setStep('preview')
+    } catch (err: any) {
+      if (err.message?.includes('expirado') || err.message?.includes('Token')) {
+        setGmailConnected(false)
+      }
+      toast({ title: 'Erro ao escanear Gmail', description: err.message, variant: 'destructive' })
+    } finally {
+      setIsScanningGmail(false)
+    }
+  }
+
   // Check if Gmail is connected and auto-scan on redirect back from OAuth
   useEffect(() => {
     gmailService.isConnected().then(connected => {
       setGmailConnected(connected)
       if (connected && searchParams.get('tab') === 'gmail') {
-        // Save refresh token to DB then auto-scan
         if (user?.id) gmailService.saveRefreshToken(user.id)
         handleGmailScan()
       }
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  const ACCEPTED_EXTENSIONS = ['.csv', '.ofx', '.xlsx', '.xls']
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
@@ -138,43 +173,6 @@ const Import = () => {
     setSelectedIds(new Set(allTransactions.map((_, i) => i)))
     setStep('preview')
     setIsParsing(false)
-  }
-
-  const handleConnectGmail = async () => {
-    try {
-      await gmailService.connectGmail()
-      // Page will redirect to Google consent then back to /import?tab=gmail
-    } catch (err: any) {
-      toast({ title: 'Erro ao conectar Gmail', description: err.message, variant: 'destructive' })
-    }
-  }
-
-  const handleGmailScan = async () => {
-    setIsScanningGmail(true)
-    try {
-      const { transactions, scanned } = await gmailService.parseEmails(user?.id ?? '', 90)
-      setGmailScanned(scanned)
-
-      if (transactions.length === 0) {
-        toast({
-          title: 'Nenhuma transação encontrada',
-          description: `Verificamos ${scanned} e-mails nos últimos 90 dias sem encontrar valores financeiros reconhecíveis.`,
-        })
-        setIsScanningGmail(false)
-        return
-      }
-
-      setParsedTransactions(transactions)
-      setSelectedIds(new Set(transactions.map((_, i) => i)))
-      setStep('preview')
-    } catch (err: any) {
-      if (err.message?.includes('expirado') || err.message?.includes('Token')) {
-        setGmailConnected(false)
-      }
-      toast({ title: 'Erro ao escanear Gmail', description: err.message, variant: 'destructive' })
-    } finally {
-      setIsScanningGmail(false)
-    }
   }
 
   const updateTransactionCategory = (index: number, category: string) => {
