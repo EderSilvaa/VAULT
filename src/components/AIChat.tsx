@@ -33,7 +33,7 @@ export function AIChat({ onSimulate }: AIChatProps) {
     const [isLoading, setIsLoading] = useState(false)
     const scrollRef = useRef<HTMLDivElement>(null)
 
-    // Initial greeting
+    // Initial greeting — runs once on mount intentionally
     useEffect(() => {
         if (messages.length === 0) {
             setMessages([
@@ -43,6 +43,7 @@ export function AIChat({ onSimulate }: AIChatProps) {
                 }
             ])
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
     // Auto-scroll to bottom

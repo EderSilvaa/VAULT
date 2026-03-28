@@ -1,4 +1,5 @@
 import { defineConfig } from "vite";
+/// <reference types="vitest" />
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { VitePWA } from 'vite-plugin-pwa';
@@ -59,6 +60,12 @@ VitePWA({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+  },
+  test: {
+    globals: true,
+    environment: 'happy-dom',
+    setupFiles: ['./src/test/setup.ts'],
+    include: ['src/**/*.{test,spec}.{ts,tsx}'],
   },
   build: {
     // Optimize chunk size

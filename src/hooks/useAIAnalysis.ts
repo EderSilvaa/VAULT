@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from './useAuth';
 
@@ -114,9 +114,9 @@ export function useAIAnalysis() {
       analysisChannel.unsubscribe();
       alertsChannel.unsubscribe();
     };
-  }, [user]);
+  }, [user, loadLatestAnalysis, loadAlerts]);
 
-  const loadLatestAnalysis = async () => {
+  const loadLatestAnalysis = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -159,9 +159,9 @@ export function useAIAnalysis() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
-  const loadAlerts = async () => {
+  const loadAlerts = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -195,7 +195,13 @@ export function useAIAnalysis() {
     } catch (err) {
       console.error('[useAIAnalysis] Error loading alerts:', err);
     }
-  };
+  }, [user]);
+
+  const refreshAnalysis = useCallback(() => {
+    setLoading(true);
+    loadLatestAnalysis();
+    loadAlerts();
+  }, [loadLatestAnalysis, loadAlerts]);
 
   const markAlertAsRead = async (alertId: string) => {
     if (!user) return;
@@ -260,11 +266,6 @@ export function useAIAnalysis() {
     }
   };
 
-  const refreshAnalysis = () => {
-    setLoading(true);
-    loadLatestAnalysis();
-    loadAlerts();
-  };
 
   return {
     analysis,

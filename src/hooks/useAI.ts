@@ -22,7 +22,7 @@ export function useAI() {
     if (user?.id) {
       loadLatestAnalysisFromDB()
     }
-  }, [user?.id])
+  }, [user?.id, loadLatestAnalysisFromDB])
 
   // Load latest analysis from database
   const loadLatestAnalysisFromDB = useCallback(async () => {
@@ -140,7 +140,7 @@ export function useAI() {
     } finally {
       setLoading(false)
     }
-  }, [user?.id, isConfigured])
+  }, [user?.id])
 
   // Predict future balance
   const predictBalance = useCallback(async (daysAhead: number = 30) => {
@@ -164,7 +164,7 @@ export function useAI() {
     } finally {
       setLoading(false)
     }
-  }, [user?.id, isConfigured])
+  }, [user?.id])
 
   // Detect spending anomalies
   const detectAnomalies = useCallback(async () => {
@@ -188,7 +188,7 @@ export function useAI() {
     } finally {
       setLoading(false)
     }
-  }, [user?.id, isConfigured])
+  }, [user?.id])
 
   // Analyze spending patterns
   const analyzeSpendingPatterns = useCallback(async () => {
@@ -212,7 +212,7 @@ export function useAI() {
     } finally {
       setLoading(false)
     }
-  }, [user?.id, isConfigured])
+  }, [user?.id])
 
   // Run full AI analysis (all features)
   const runFullAnalysis = useCallback(async () => {
@@ -284,7 +284,7 @@ export function useAI() {
     } finally {
       setLoading(false)
     }
-  }, [user?.id, isConfigured])
+  }, [user?.id])
 
   return {
     // State
