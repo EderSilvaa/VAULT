@@ -1,10 +1,10 @@
-import { useState, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useMemo, useEffect } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
   Upload, FileText, Loader2, ArrowLeft, Check, X, FileSpreadsheet,
-  ArrowUpDown, ChevronDown, Trash2
+  ArrowUpDown, ChevronDown, Trash2, Mail, RefreshCw
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { parseCSV, parseOFX, parseXLSX, type ImportedTransaction } from '@/utils/parsers'
@@ -13,10 +13,16 @@ import { useAuth } from '@/hooks/useAuth'
 import { TRANSACTION_CATEGORIES } from '@/lib/validations'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import { gmailService } from '@/services/gmail.service'
 
 type Step = 'upload' | 'preview'
+type Tab = 'files' | 'gmail'
 
 const Import = () => {
+  const [searchParams] = useSearchParams()
+  const [tab, setTab] = useState<Tab>(() =>
+    searchParams.get('tab') === 'gmail' ? 'gmail' : 'files'
+  )
   const [step, setStep] = useState<Step>('upload')
   const [isDragging, setIsDragging] = useState(false)
   const [files, setFiles] = useState<File[]>([])
@@ -24,10 +30,26 @@ const Import = () => {
   const [isParsing, setIsParsing] = useState(false)
   const [parsedTransactions, setParsedTransactions] = useState<ImportedTransaction[]>([])
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [gmailConnected, setGmailConnected] = useState(false)
+  const [isScanningGmail, setIsScanningGmail] = useState(false)
+  const [gmailScanned, setGmailScanned] = useState(0)
   const { toast } = useToast()
   const navigate = useNavigate()
   const { user } = useAuth()
   const { createTransactions } = useTransactions(user?.id)
+
+  // Check if Gmail is connected and auto-scan on redirect back from OAuth
+  useEffect(() => {
+    gmailService.isConnected().then(connected => {
+      setGmailConnected(connected)
+      if (connected && searchParams.get('tab') === 'gmail') {
+        // Save refresh token to DB then auto-scan
+        if (user?.id) gmailService.saveRefreshToken(user.id)
+        handleGmailScan()
+      }
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const ACCEPTED_EXTENSIONS = ['.csv', '.ofx', '.xlsx', '.xls']
 
@@ -118,6 +140,43 @@ const Import = () => {
     setIsParsing(false)
   }
 
+  const handleConnectGmail = async () => {
+    try {
+      await gmailService.connectGmail()
+      // Page will redirect to Google consent then back to /import?tab=gmail
+    } catch (err: any) {
+      toast({ title: 'Erro ao conectar Gmail', description: err.message, variant: 'destructive' })
+    }
+  }
+
+  const handleGmailScan = async () => {
+    setIsScanningGmail(true)
+    try {
+      const { transactions, scanned } = await gmailService.parseEmails(user?.id ?? '', 90)
+      setGmailScanned(scanned)
+
+      if (transactions.length === 0) {
+        toast({
+          title: 'Nenhuma transação encontrada',
+          description: `Verificamos ${scanned} e-mails nos últimos 90 dias sem encontrar valores financeiros reconhecíveis.`,
+        })
+        setIsScanningGmail(false)
+        return
+      }
+
+      setParsedTransactions(transactions)
+      setSelectedIds(new Set(transactions.map((_, i) => i)))
+      setStep('preview')
+    } catch (err: any) {
+      if (err.message?.includes('expirado') || err.message?.includes('Token')) {
+        setGmailConnected(false)
+      }
+      toast({ title: 'Erro ao escanear Gmail', description: err.message, variant: 'destructive' })
+    } finally {
+      setIsScanningGmail(false)
+    }
+  }
+
   const updateTransactionCategory = (index: number, category: string) => {
     setParsedTransactions((prev) =>
       prev.map((t, i) => (i === index ? { ...t, category } : t))
@@ -204,10 +263,113 @@ const Import = () => {
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Importar Transações</h1>
           <p className="text-sm text-muted-foreground">
-            Importe extratos bancários (OFX, CSV ou Excel) para atualizar seu fluxo de caixa.
+            Importe extratos bancários ou escaneie seus e-mails financeiros.
           </p>
         </div>
 
+        {/* Tabs */}
+        <div className="flex border-b">
+          <button
+            onClick={() => setTab('files')}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              tab === 'files'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Upload className="w-4 h-4" />
+            Arquivos
+          </button>
+          <button
+            onClick={() => setTab('gmail')}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              tab === 'gmail'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Mail className="w-4 h-4" />
+            Gmail
+          </button>
+        </div>
+
+        {/* ── Gmail Tab ── */}
+        {tab === 'gmail' && (
+          <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Mail className="w-5 h-5 text-primary" />
+                  Escanear e-mails financeiros
+                </CardTitle>
+                <CardDescription>
+                  O Vault busca automaticamente NF-e, PIX, boletos e confirmações de pagamento
+                  nos seus últimos 90 dias de e-mails.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {!gmailConnected ? (
+                  <div className="flex flex-col items-center gap-4 py-6 text-center">
+                    <div className="p-4 rounded-full bg-primary/10">
+                      <Mail className="w-8 h-8 text-primary" />
+                    </div>
+                    <div>
+                      <p className="font-medium">Conecte sua conta Google</p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Permissão somente leitura — o Vault nunca envia e-mails.
+                      </p>
+                    </div>
+                    <Button onClick={handleConnectGmail} className="gap-2">
+                      <Mail className="w-4 h-4" />
+                      Conectar Gmail
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-4 py-4 text-center">
+                    <div className="flex items-center gap-2 text-sm text-green-600 font-medium">
+                      <Check className="w-4 h-4" />
+                      Gmail conectado
+                    </div>
+                    {gmailScanned > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        Último scan: {gmailScanned} e-mails verificados
+                      </p>
+                    )}
+                    <div className="flex gap-3">
+                      <Button onClick={handleGmailScan} disabled={isScanningGmail} className="gap-2">
+                        {isScanningGmail ? (
+                          <><Loader2 className="w-4 h-4 animate-spin" />Escaneando...</>
+                        ) : (
+                          <><RefreshCw className="w-4 h-4" />Escanear e-mails</>
+                        )}
+                      </Button>
+                      <Button variant="outline" onClick={handleConnectGmail} className="gap-2" size="sm">
+                        <Mail className="w-3 h-3" />
+                        Reconectar
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="border rounded-lg p-3 bg-muted/30">
+                  <p className="text-xs font-medium text-muted-foreground mb-2">O que é detectado:</p>
+                  <div className="grid grid-cols-2 gap-1 text-xs text-muted-foreground">
+                    <span>✓ NF-e / Nota Fiscal</span>
+                    <span>✓ PIX recebido/enviado</span>
+                    <span>✓ Boletos pagos</span>
+                    <span>✓ Confirmações de pagamento</span>
+                    <span>✓ Transferências bancárias</span>
+                    <span>✓ Faturas de serviço</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* ── Files Tab ── */}
+        {tab === 'files' && (
+        <div className="space-y-6">
         <Card className="border-dashed border-2 bg-muted/20">
           <CardContent
             className={`flex flex-col items-center justify-center p-8 md:p-12 transition-colors ${
@@ -297,6 +459,8 @@ const Import = () => {
               </div>
             </CardContent>
           </Card>
+        )}
+        </div>
         )}
       </div>
     )
