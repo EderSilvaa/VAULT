@@ -52,7 +52,7 @@ export const aiService = {
       console.log('[AI] Generating insights for user:', userId)
 
       // Note: supabase.functions.invoke() automatically sends auth token if session exists
-      const { data, error } = await supabase.functions.invoke('rapid-service', {
+      const { data, error } = await supabase.functions.invoke('ai-insights', {
         body: {
           action: 'generate-insights',
           userId,
@@ -88,7 +88,7 @@ export const aiService = {
     try {
       console.log(`[AI] Predicting balance for ${daysAhead} days ahead`)
 
-      const { data, error } = await supabase.functions.invoke('rapid-service', {
+      const { data, error } = await supabase.functions.invoke('ai-insights', {
         body: {
           action: 'predict-balance',
           userId,
@@ -115,7 +115,7 @@ export const aiService = {
     try {
       console.log('[AI] Detecting anomalies')
 
-      const { data, error } = await supabase.functions.invoke('rapid-service', {
+      const { data, error } = await supabase.functions.invoke('ai-insights', {
         body: {
           action: 'detect-anomalies',
           userId,
@@ -141,7 +141,7 @@ export const aiService = {
     try {
       console.log('[AI] Analyzing spending patterns')
 
-      const { data, error } = await supabase.functions.invoke('rapid-service', {
+      const { data, error } = await supabase.functions.invoke('ai-insights', {
         body: {
           action: 'analyze-patterns',
           userId,
@@ -393,7 +393,7 @@ Analise JSON:
     try {
       console.log(`[AI] Generating action plan for critical situation: ${daysUntilZero} days until zero`)
 
-      const { data, error } = await supabase.functions.invoke('rapid-service', {
+      const { data, error } = await supabase.functions.invoke('ai-insights', {
         body: {
           action: 'generate-action-plan',
           userId,

@@ -125,11 +125,6 @@ export function useAI() {
       return
     }
 
-    if (!isConfigured) {
-      setError('AI service not configured. Please add VITE_OPENAI_API_KEY to .env')
-      return
-    }
-
     try {
       setLoading(true)
       setError(null)
@@ -151,11 +146,6 @@ export function useAI() {
   const predictBalance = useCallback(async (daysAhead: number = 30) => {
     if (!user?.id) {
       setError('User not authenticated')
-      return
-    }
-
-    if (!isConfigured) {
-      setError('AI service not configured')
       return
     }
 
@@ -183,11 +173,6 @@ export function useAI() {
       return
     }
 
-    if (!isConfigured) {
-      setError('AI service not configured')
-      return
-    }
-
     try {
       setLoading(true)
       setError(null)
@@ -212,11 +197,6 @@ export function useAI() {
       return
     }
 
-    if (!isConfigured) {
-      setError('AI service not configured')
-      return
-    }
-
     try {
       setLoading(true)
       setError(null)
@@ -238,11 +218,6 @@ export function useAI() {
   const runFullAnalysis = useCallback(async () => {
     if (!user?.id) {
       setError('User not authenticated')
-      return
-    }
-
-    if (!isConfigured) {
-      setError('AI service not configured. Please add VITE_OPENAI_API_KEY to .env.local')
       return
     }
 

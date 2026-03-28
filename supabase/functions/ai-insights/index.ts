@@ -27,12 +27,9 @@ serve(async (req) => {
       throw new Error('OpenAI API key not configured in secrets')
     }
 
-    // Debug: Log headers
     const authHeader = req.headers.get('Authorization')
-    console.log('[AUTH DEBUG] Authorization header:', authHeader ? 'Present' : 'Missing')
 
     if (!authHeader) {
-      console.error('[AUTH ERROR] No Authorization header found')
       return new Response(JSON.stringify({ error: 'No authorization header' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -54,9 +51,6 @@ serve(async (req) => {
       data: { user },
       error: authError,
     } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''))
-
-    console.log('[AUTH DEBUG] User:', user ? user.id : 'null')
-    console.log('[AUTH DEBUG] Auth error:', authError)
 
     if (authError || !user) {
       return new Response(JSON.stringify({ error: 'Unauthorized', details: authError?.message }), {
@@ -108,6 +102,9 @@ serve(async (req) => {
           openaiKey,
           params.messages
         )
+        break
+      case 'optimize-tax-regime':
+        result = await optimizeTaxRegime(supabase, userId, openaiKey)
         break
       default:
         throw new Error(`Unknown action: ${action}`)
@@ -329,7 +326,10 @@ async function detectAnomalies(supabase: any, userId: string, openaiKey: string)
   const expenses = financialData.transactions.filter((t: any) => t.type === 'expense')
   const incomes = financialData.transactions.filter((t: any) => t.type === 'income')
 
-  const prompt = `${financialData.transactions.length} transações | Despesa média: R$ ${(financialData.expenses / expenses.length).toFixed(0)} | Receita média: R$ ${(financialData.income / incomes.length).toFixed(0)}
+  const avgExpense = expenses.length > 0 ? financialData.expenses / expenses.length : 0
+  const avgIncome  = incomes.length  > 0 ? financialData.income  / incomes.length  : 0
+
+  const prompt = `${financialData.transactions.length} transações | Despesa média: R$ ${avgExpense.toFixed(0)} | Receita média: R$ ${avgIncome.toFixed(0)}
 
 Top 15 recentes: ${summary.recentHighValue}
 
@@ -539,3 +539,65 @@ Se não for nenhum desses casos, responda apenas com texto.
   }
 }
 
+// Action: Optimize Tax Regime
+async function optimizeTaxRegime(supabase: any, userId: string, openaiKey: string) {
+  const financialData = await getUserFinancialData(supabase, userId)
+
+  // Get user's current tax settings
+  const { data: taxSettings } = await supabase
+    .from('tax_settings')
+    .select('regime, simples_anexo, iss_rate, has_employees, employee_count, prolabore_amount')
+    .eq('user_id', userId)
+    .maybeSingle()
+
+  const currentRegime = taxSettings?.regime || 'simples_nacional'
+  const annualRevenue = (financialData.income / 3) * 12 // 90-day extrapolation
+
+  const prompt = `MEI/Empreendedor Brasileiro. Regime atual: ${currentRegime}. Faturamento anual estimado: R$ ${annualRevenue.toFixed(0)}.
+Funcionários: ${taxSettings?.has_employees ? taxSettings.employee_count : 0}. Pró-labore: R$ ${taxSettings?.prolabore_amount || 0}.
+Receita 90d: R$ ${financialData.income.toFixed(0)} | Despesa 90d: R$ ${financialData.expenses.toFixed(0)}.
+
+Analise se o regime atual é ótimo e sugira alternativas. Retorne JSON:
+{
+  "current_regime": "${currentRegime}",
+  "suggested_regime": "simples_nacional|presumido|real|mei",
+  "current_annual_tax": 0,
+  "projected_annual_tax": 0,
+  "potential_savings": 0,
+  "savings_percentage": 0,
+  "recommendation": "texto curto",
+  "reasoning": "explicação detalhada",
+  "confidence": 0.85
+}`
+
+  const result = await callOpenAI(
+    openaiKey,
+    [
+      {
+        role: 'system',
+        content: 'Especialista tributário brasileiro para MEI e pequenas empresas. Analise o regime tributário mais eficiente com base nos dados financeiros fornecidos.',
+      },
+      { role: 'user', content: prompt },
+    ],
+    { max_tokens: 600 }
+  )
+
+  // Save to optimization history
+  await supabase
+    .from('tax_optimization_history')
+    .insert({
+      user_id: userId,
+      analysis_date: new Date().toISOString(),
+      current_regime: result.current_regime,
+      suggested_regime: result.suggested_regime,
+      current_annual_tax: result.current_annual_tax || 0,
+      projected_annual_tax: result.projected_annual_tax || 0,
+      potential_savings: result.potential_savings || 0,
+      savings_percentage: result.savings_percentage || 0,
+      recommendation: result.recommendation,
+      reasoning: result.reasoning,
+      confidence: result.confidence || 0.7,
+    })
+
+  return result
+}

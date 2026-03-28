@@ -92,6 +92,15 @@ export interface TaxSettingsInput {
   has_employees?: boolean
   employee_count?: number
   prolabore_amount?: number
+
+  // Reforma Tributária (LC 68/2024)
+  tax_regime_version?: TaxRegimeVersion
+  ibs_rate?: number
+  ibs_state?: string
+  cbs_rate?: number
+  transition_year?: number
+  eligible_for_cashback?: boolean
+  post_reform_regime?: PostReformRegime
 }
 
 // ============================================================

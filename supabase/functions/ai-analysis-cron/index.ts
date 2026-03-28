@@ -110,14 +110,21 @@ serve(async (req) => {
           error: error.message,
         });
 
-        // Track failure
+        // Track failure — supabase.raw() is not supported in JS client v2,
+        // so fetch current counter first then increment.
+        const { data: currentSchedule } = await supabase
+          .from('ai_analysis_schedule')
+          .select('consecutive_failures')
+          .eq('user_id', schedule.user_id)
+          .single();
+
         await supabase
           .from('ai_analysis_schedule')
           .update({
             last_run_at: new Date().toISOString(),
             last_run_status: 'failed',
             last_error: error.message,
-            consecutive_failures: supabase.raw('consecutive_failures + 1'),
+            consecutive_failures: (currentSchedule?.consecutive_failures ?? 0) + 1,
           })
           .eq('user_id', schedule.user_id);
       }

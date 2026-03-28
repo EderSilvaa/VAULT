@@ -32,12 +32,9 @@ serve(async (req) => {
       throw new Error('Pluggy credentials not configured in secrets')
     }
 
-    // Debug: Log headers
     const authHeader = req.headers.get('Authorization')
-    console.log('[PLUGGY AUTH DEBUG] Authorization header:', authHeader ? 'Present' : 'Missing')
 
     if (!authHeader) {
-      console.error('[PLUGGY AUTH ERROR] No Authorization header found')
       return new Response(JSON.stringify({ error: 'No authorization header' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -60,9 +57,6 @@ serve(async (req) => {
       error: authError,
     } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''))
 
-    console.log('[PLUGGY AUTH DEBUG] User:', user ? user.id : 'null')
-    console.log('[PLUGGY AUTH DEBUG] Auth error:', authError)
-
     if (authError || !user) {
       return new Response(JSON.stringify({ error: 'Unauthorized', details: authError?.message }), {
         status: 401,
@@ -72,6 +66,33 @@ serve(async (req) => {
 
     // Parse request body
     const { action, itemId, accountId, from, to } = await req.json()
+
+    // Ownership validation helpers
+    async function verifyItemOwnership(pluggyItemId: string) {
+      const { data, error } = await supabase
+        .from('bank_connections')
+        .select('id')
+        .eq('pluggy_item_id', pluggyItemId)
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      if (error || !data) {
+        throw new Error('Item not found or access denied')
+      }
+    }
+
+    async function verifyAccountOwnership(pluggyAccountId: string) {
+      const { data, error } = await supabase
+        .from('bank_accounts')
+        .select('id')
+        .eq('pluggy_account_id', pluggyAccountId)
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      if (error || !data) {
+        throw new Error('Account not found or access denied')
+      }
+    }
 
     // Get Pluggy API key
     const apiKey = await getPluggyApiKey(clientId, clientSecret)
@@ -87,22 +108,27 @@ serve(async (req) => {
         break
       case 'get-item':
         if (!itemId) throw new Error('itemId is required')
+        await verifyItemOwnership(itemId)
         result = await getItem(apiKey, itemId)
         break
       case 'delete-item':
         if (!itemId) throw new Error('itemId is required')
+        await verifyItemOwnership(itemId)
         result = await deleteItem(apiKey, itemId)
         break
       case 'get-accounts':
         if (!itemId) throw new Error('itemId is required')
+        await verifyItemOwnership(itemId)
         result = await getAccounts(apiKey, itemId)
         break
       case 'get-account':
         if (!accountId) throw new Error('accountId is required')
+        await verifyAccountOwnership(accountId)
         result = await getAccount(apiKey, accountId)
         break
       case 'get-transactions':
         if (!accountId) throw new Error('accountId is required')
+        await verifyAccountOwnership(accountId)
         result = await getTransactions(apiKey, accountId, from, to)
         break
       case 'get-connectors':

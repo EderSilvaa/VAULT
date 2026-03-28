@@ -39,13 +39,48 @@ CREATE TABLE IF NOT EXISTS projections (
 );
 
 -- Create financial_goals table
+-- NOTE: authoritative definition is supabase/migrations/20250113_smart_goals.sql
 CREATE TABLE IF NOT EXISTS financial_goals (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+
+  -- Goal details
   title TEXT NOT NULL,
+  description TEXT,
   target_amount DECIMAL(12, 2) NOT NULL CHECK (target_amount > 0),
   current_amount DECIMAL(12, 2) DEFAULT 0 CHECK (current_amount >= 0),
-  deadline TIMESTAMPTZ,
+
+  -- Computed progress (0-100)
+  progress_percentage INTEGER GENERATED ALWAYS AS (
+    CASE
+      WHEN target_amount > 0 THEN LEAST(100, ROUND((current_amount / target_amount * 100)::numeric, 0)::integer)
+      ELSE 0
+    END
+  ) STORED,
+
+  -- Time-based goals
+  target_date DATE,
+  started_at TIMESTAMPTZ DEFAULT NOW(),
+
+  -- AI-generated insights
+  is_ai_suggested BOOLEAN DEFAULT FALSE,
+  daily_target DECIMAL(10, 2),
+  weekly_target DECIMAL(10, 2),
+  on_track BOOLEAN DEFAULT TRUE,
+  days_behind INTEGER DEFAULT 0,
+  suggested_actions TEXT[],
+
+  -- Goal status
+  status TEXT DEFAULT 'active' CHECK (status IN ('active', 'paused', 'completed', 'failed')),
+  completed_at TIMESTAMPTZ,
+
+  -- Category
+  category TEXT DEFAULT 'savings' CHECK (category IN (
+    'savings', 'emergency_fund', 'debt_payment', 'business_expansion',
+    'equipment', 'reserve', 'custom'
+  )),
+
+  -- Metadata
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

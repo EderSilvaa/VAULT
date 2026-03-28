@@ -27,35 +27,27 @@ if (!supabaseUrl || !supabaseServiceKey) {
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 async function setupDatabase() {
-  console.log('🚀 Iniciando setup do banco de dados...\n');
+  console.log('🚀 Setup do banco de dados Vault\n');
 
-  try {
-    // Ler o arquivo SQL
-    const sqlPath = join(__dirname, '..', 'supabase', 'schema.sql');
-    const sql = readFileSync(sqlPath, 'utf8');
+  // Validate connectivity
+  const { error: pingError } = await supabase.from('profiles').select('id').limit(1);
 
-    console.log('📝 Executando schema SQL...');
-
-    // Executar SQL via RPC
-    const { data, error } = await supabase.rpc('exec_sql', { sql_query: sql });
-
-    if (error) {
-      console.error('❌ Erro ao executar SQL:', error);
-      throw error;
-    }
-
-    console.log('✅ Banco de dados configurado com sucesso!\n');
-    console.log('Tabelas criadas:');
-    console.log('  ✓ profiles');
-    console.log('  ✓ transactions');
-    console.log('  ✓ projections');
-    console.log('  ✓ financial_goals');
-    console.log('  ✓ ai_insights\n');
-
-  } catch (error) {
-    console.error('\n❌ Erro durante setup:', error.message);
+  if (pingError && pingError.code !== 'PGRST116') {
+    console.error('❌ Erro ao conectar ao Supabase:', pingError.message);
+    console.log('\nVerifique se as variáveis de ambiente estão corretas.');
     process.exit(1);
   }
+
+  console.log('✅ Conexão com Supabase OK\n');
+  console.log('⚠️  Este script NÃO executa SQL diretamente (exec_sql foi removido por segurança).\n');
+  console.log('Para aplicar o schema e as migrations, use o Supabase CLI:\n');
+  console.log('  1. Instale: npm install -g supabase');
+  console.log('  2. Login:   supabase login');
+  console.log('  3. Vincule: supabase link --project-ref SEU_PROJECT_REF');
+  console.log('  4. Execute: supabase db push\n');
+  console.log('Ou aplique as migrations manualmente pelo Supabase Dashboard:');
+  console.log('  https://supabase.com/dashboard → SQL Editor\n');
+  console.log('Migrations disponíveis em: supabase/migrations/\n');
 }
 
 setupDatabase();

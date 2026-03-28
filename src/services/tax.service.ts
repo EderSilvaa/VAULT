@@ -43,6 +43,14 @@ export const taxService = {
       has_employees: data.has_employees,
       employee_count: data.employee_count,
       prolabore_amount: data.prolabore_amount ? Number(data.prolabore_amount) : undefined,
+      // Reforma Tributária
+      tax_regime_version: data.tax_regime_version,
+      ibs_rate: data.ibs_rate ? Number(data.ibs_rate) : undefined,
+      ibs_state: data.ibs_state,
+      cbs_rate: data.cbs_rate ? Number(data.cbs_rate) : undefined,
+      transition_year: data.transition_year,
+      eligible_for_cashback: data.eligible_for_cashback,
+      post_reform_regime: data.post_reform_regime,
       regime_history: data.regime_history || [],
       created_at: data.created_at,
       updated_at: data.updated_at,
@@ -65,6 +73,14 @@ export const taxService = {
           has_employees: settings.has_employees || false,
           employee_count: settings.employee_count || 0,
           prolabore_amount: settings.prolabore_amount,
+          // Reforma Tributária
+          tax_regime_version: settings.tax_regime_version,
+          ibs_rate: settings.ibs_rate,
+          ibs_state: settings.ibs_state,
+          cbs_rate: settings.cbs_rate,
+          transition_year: settings.transition_year,
+          eligible_for_cashback: settings.eligible_for_cashback,
+          post_reform_regime: settings.post_reform_regime,
         },
         {
           onConflict: 'user_id',
@@ -86,6 +102,14 @@ export const taxService = {
       has_employees: data.has_employees,
       employee_count: data.employee_count,
       prolabore_amount: data.prolabore_amount ? Number(data.prolabore_amount) : undefined,
+      // Reforma Tributária
+      tax_regime_version: data.tax_regime_version,
+      ibs_rate: data.ibs_rate ? Number(data.ibs_rate) : undefined,
+      ibs_state: data.ibs_state,
+      cbs_rate: data.cbs_rate ? Number(data.cbs_rate) : undefined,
+      transition_year: data.transition_year,
+      eligible_for_cashback: data.eligible_for_cashback,
+      post_reform_regime: data.post_reform_regime,
       regime_history: data.regime_history || [],
       created_at: data.created_at,
       updated_at: data.updated_at,
@@ -153,12 +177,15 @@ export const taxService = {
       .order('year', { ascending: false })
       .order('month', { ascending: false })
 
+    // Correct year-month range: independent .gte('year').gte('month') is wrong across year boundaries
+    // e.g. year>=2024 AND month>=11 misses Jan 2025 (month=1 < 11)
+    // Fix: (year > startYear) OR (year = startYear AND month >= startMonth)
     if (startYear && startMonth) {
-      query = query.gte('year', startYear).gte('month', startMonth)
+      query = query.or(`year.gt.${startYear},and(year.eq.${startYear},month.gte.${startMonth})`)
     }
 
     if (endYear && endMonth) {
-      query = query.lte('year', endYear).lte('month', endMonth)
+      query = query.or(`year.lt.${endYear},and(year.eq.${endYear},month.lte.${endMonth})`)
     }
 
     const { data, error } = await query
