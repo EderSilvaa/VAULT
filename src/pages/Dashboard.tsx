@@ -306,26 +306,98 @@ const Dashboard = () => {
           {/* ════════ DASHBOARD (default) ════════ */}
           {activeSection === 'dashboard' && (
             <>
-              {/* KPIs compactos */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <Card className="p-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Saldo</p>
-                  <p className="text-xl font-bold mt-1">R$ {currentBalance.toLocaleString('pt-BR')}</p>
-                </Card>
-                <Card className="p-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Receita</p>
-                  <p className="text-xl font-bold text-green-600 mt-1">R$ {totalRevenue.toLocaleString('pt-BR')}</p>
-                </Card>
-                <Card className="p-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Despesas</p>
-                  <p className="text-xl font-bold text-red-500 mt-1">R$ {totalExpenses.toLocaleString('pt-BR')}</p>
-                </Card>
-                <Card className="p-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Alerta</p>
-                  <p className="text-xl font-bold text-orange-500 mt-1">{daysUntilZero}d</p>
-                  <p className="text-[10px] text-muted-foreground">até zerar</p>
-                </Card>
-              </div>
+              {/* ─── Hero: Saúde do Caixa ─── */}
+              {(() => {
+                const monthlyBurn = stats.monthlySavings // negative = burning
+                const isPositive = monthlyBurn >= 0
+                const burnPerMonth = Math.abs(monthlyBurn)
+                const isCritical = !isPositive && daysUntilZero > 0 && daysUntilZero < 15
+                const isWarning = !isPositive && daysUntilZero >= 15 && daysUntilZero < 60
+                const isHealthy = isPositive || daysUntilZero >= 60
+
+                const statusColor = isCritical
+                  ? 'border-red-500/40 bg-red-500/5'
+                  : isWarning
+                  ? 'border-orange-400/40 bg-orange-400/5'
+                  : 'border-green-500/40 bg-green-500/5'
+
+                const dotColor = isCritical ? 'bg-red-500' : isWarning ? 'bg-orange-400' : 'bg-green-500'
+                const labelColor = isCritical ? 'text-red-500' : isWarning ? 'text-orange-400' : 'text-green-500'
+                const daysColor = isCritical ? 'text-red-500' : isWarning ? 'text-orange-400' : 'text-green-500'
+
+                const statusLabel = isCritical ? 'Risco Crítico' : isWarning ? 'Atenção Necessária' : 'Caixa Saudável'
+                const statusMsg = isCritical
+                  ? `Seu caixa zera em ${daysUntilZero} dias. Ação imediata necessária.`
+                  : isWarning
+                  ? `No ritmo atual, você tem ${daysUntilZero} dias de caixa. Revise suas despesas.`
+                  : isPositive
+                  ? `Receita supera despesas em R$ ${burnPerMonth.toLocaleString('pt-BR')}/mês. Bom trabalho!`
+                  : `Caixa estável por mais de 60 dias no ritmo atual.`
+
+                // progress bar: 0-100% de 0 a 90 dias
+                const progressPct = isPositive ? 100 : Math.min(100, Math.round((daysUntilZero / 90) * 100))
+
+                return (
+                  <Card className={`border-2 ${statusColor}`}>
+                    <CardContent className="p-4">
+                      {/* Top row */}
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-center gap-2">
+                          <span className={`inline-block h-2.5 w-2.5 rounded-full ${dotColor} ${isCritical ? 'animate-pulse' : ''}`} />
+                          <span className={`text-xs font-bold uppercase tracking-wider ${labelColor}`}>{statusLabel}</span>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Saldo atual</p>
+                          <p className="text-lg font-bold tabular-nums">
+                            R$ {currentBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Days counter */}
+                      <div className="mt-4 flex items-end gap-3">
+                        <div>
+                          <p className={`text-5xl font-black tabular-nums leading-none ${daysColor}`}>
+                            {isPositive ? '∞' : daysUntilZero}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">dias de caixa restantes</p>
+                        </div>
+                        <div className="flex-1 pb-1">
+                          <p className="text-xs text-muted-foreground mb-1.5">{statusMsg}</p>
+                          <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-700 ${isCritical ? 'bg-red-500' : isWarning ? 'bg-orange-400' : 'bg-green-500'}`}
+                              style={{ width: `${progressPct}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Bottom KPIs */}
+                      <div className="mt-4 grid grid-cols-3 gap-3 border-t border-border/50 pt-4">
+                        <div>
+                          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Receita</p>
+                          <p className="text-sm font-bold text-green-600 mt-0.5 tabular-nums">
+                            +R$ {totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Despesas</p>
+                          <p className="text-sm font-bold text-red-500 mt-0.5 tabular-nums">
+                            -R$ {totalExpenses.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Burn/mês</p>
+                          <p className={`text-sm font-bold mt-0.5 tabular-nums ${isPositive ? 'text-green-600' : 'text-red-500'}`}>
+                            {isPositive ? '+' : '-'}R$ {burnPerMonth.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )
+              })()}
 
               {/* Quick Actions */}
               <div className="grid grid-cols-2 gap-3">
@@ -347,8 +419,8 @@ const Dashboard = () => {
                 </Button>
               </div>
 
-              {/* Action Plan (critical) */}
-              {daysUntilZero < 15 && daysUntilZero > 0 && (
+              {/* Action Plan (ativa a partir de 30 dias) */}
+              {!statsLoading && daysUntilZero > 0 && daysUntilZero < 30 && (
                 <ActionPlan
                   daysUntilZero={daysUntilZero}
                   currentBalance={currentBalance}

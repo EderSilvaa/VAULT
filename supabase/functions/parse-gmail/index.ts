@@ -15,79 +15,21 @@ interface ParsedTransaction {
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// Gmail search query
+// Gmail search query — broad keywords (no subject: prefix so Gmail
+// searches subject + body + sender). Short enough to avoid URL limits.
+// parseMessage filters out emails with no R$ value anyway.
 // ──────────────────────────────────────────────────────────────────────
-const SEARCH_TERMS = [
-  // NF-e / Nota Fiscal
-  'subject:"nota fiscal"', 'subject:"NF-e"', 'subject:"NFe"',
-  'subject:"nfe emitida"', 'subject:"nota fiscal emitida"',
-
-  // PIX — variações de bancos brasileiros
-  'subject:"pix"',
-  'subject:"você recebeu um pix"', 'subject:"você fez um pix"',
-  'subject:"voce recebeu um pix"', 'subject:"voce fez um pix"',
-  'subject:"recebeu um pix"', 'subject:"enviou um pix"',
-  'subject:"pix recebido"', 'subject:"pix enviado"',
-  'subject:"transferência pix"', 'subject:"transferencia pix"',
-
-  // Boleto
-  'subject:"boleto"', 'subject:"boleto pago"', 'subject:"boleto compensado"',
-  'subject:"boleto vencendo"', 'subject:"vencimento do boleto"',
-
-  // Pagamento / Transferência
-  'subject:"pagamento confirmado"', 'subject:"pagamento recebido"',
-  'subject:"pagamento efetuado"', 'subject:"pagamento aprovado"',
-  'subject:"comprovante de pagamento"', 'subject:"comprovante de transferência"',
-  'subject:"comprovante de transferencia"',
-  'subject:"transferência recebida"', 'subject:"transferência enviada"',
-  'subject:"transferencia recebida"', 'subject:"transferencia enviada"',
-  'subject:"você recebeu"', 'subject:"voce recebeu"',
-
-  // Fatura / Extrato
-  'subject:"sua fatura"', 'subject:"fatura chegou"', 'subject:"fatura do cartão"',
-  'subject:"fatura do cartao"', 'subject:"extrato"',
-  'subject:"fechamento da fatura"',
-
-  // Bancos / Fintechs específicos
-  'subject:"nubank"', 'subject:"inter"', 'subject:"itaú"', 'subject:"bradesco"',
-  'subject:"santander"', 'subject:"caixa"', 'subject:"sicoob"', 'subject:"sicredi"',
-  'subject:"mercado pago"', 'subject:"pagseguro"', 'subject:"paypal"',
-  'subject:"picpay"', 'subject:"c6 bank"', 'subject:"next"', 'subject:"neon"',
-
-  // Cobrança / Recebimento
-  'subject:"cobrança"', 'subject:"cobranca"',
-  'subject:"recebimento"', 'subject:"crédito em conta"', 'subject:"credito em conta"',
-  'subject:"débito em conta"', 'subject:"debito em conta"',
-
-  // Repasse / Marketplace
-  'subject:"repasse"', 'subject:"pagamento do pedido"',
-
-  // Dívidas / Empréstimos / Financiamentos
-  'subject:"parcela"', 'subject:"parcelamento"',
-  'subject:"empréstimo"', 'subject:"emprestimo"',
-  'subject:"financiamento"', 'subject:"carnê"', 'subject:"carne"',
-  'subject:"dívida"', 'subject:"divida"',
-  'subject:"cobrança"', 'subject:"cobranca"',
-  'subject:"negativação"', 'subject:"negativacao"',
-  'subject:"acordo"', 'subject:"renegociação"', 'subject:"renegociacao"',
-  'subject:"serasa"', 'subject:"spc"', 'subject:"protestado"',
-  'subject:"vencimento"', 'subject:"prazo de pagamento"',
-  'subject:"segunda via"', 'subject:"2 via"',
-
-  // Cartão de crédito
-  'subject:"cartão de crédito"', 'subject:"cartao de credito"',
-  'subject:"limite"', 'subject:"fatura mínima"', 'subject:"fatura minima"',
-  'subject:"pagamento mínimo"',
-
-  // Aluguel / Condomínio
-  'subject:"aluguel"', 'subject:"condomínio"', 'subject:"condominio"',
-  'subject:"iptu"', 'subject:"ipva"',
-
-  // Serviços recorrentes
-  'subject:"assinatura"', 'subject:"renovação"', 'subject:"renovacao"',
-  'subject:"mensalidade"', 'subject:"plano"',
-]
-const GMAIL_QUERY = SEARCH_TERMS.join(' OR ')
+const GMAIL_QUERY = [
+  'pix', 'boleto', 'fatura', 'pagamento', 'transferencia',
+  'transferência', 'comprovante', 'cobrança', 'cobranca',
+  'extrato', 'recebido', 'creditado', 'debitado',
+  'parcela', 'vencimento', 'emprestimo', 'empréstimo',
+  'financiamento', 'mensalidade', 'assinatura', 'aluguel',
+  'serasa', 'divida', 'dívida', 'negativacao',
+  'nota fiscal', 'nfe', 'nubank', 'inter bank',
+  'itau', 'bradesco', 'santander', 'mercado pago',
+  'picpay', 'pagseguro', 'c6bank',
+].map(t => (t.includes(' ') ? `"${t}"` : t)).join(' OR ')
 
 // ──────────────────────────────────────────────────────────────────────
 // FIX 1: HTML → plain text (proper entity decoding + block tags)
@@ -289,6 +231,30 @@ async function refreshGoogleToken(refreshToken: string): Promise<string | null> 
 }
 
 // ──────────────────────────────────────────────────────────────────────
+// Reject promotional / marketing / declined emails
+// Returns true if the message should be SKIPPED
+// ──────────────────────────────────────────────────────────────────────
+function isPromotionalOrIrrelevant(msg: any, subject: string, body: string): boolean {
+  // Gmail label check — CATEGORY_PROMOTIONS = marketing email
+  const labels: string[] = msg.labelIds ?? []
+  if (labels.includes('CATEGORY_PROMOTIONS') || labels.includes('CATEGORY_SOCIAL')) {
+    // Allow through only if it contains a strong transactional signal
+    const transactional = /recibo|comprovante|confirmação de pagamento|fatura paga|boleto pago|pix recebido|pix enviado|nota fiscal|nfe|extrato/i
+    if (!transactional.test(subject + ' ' + body)) return true
+  }
+
+  // Hard-reject: transaction declined/failed
+  const declined = /recusad|não autorizado|transação negada|pagamento recusado|falhou|não aprovado|cartão bloqueado|limite insuficiente/i
+  if (declined.test(subject + ' ' + body)) return true
+
+  // Hard-reject: promotional intent in subject (offers, deals, urgency)
+  const promoSubject = /não perca|aproveite|oferta|promoção|desconto|economize|últimos dias|horas para|compre agora|clique aqui|saiba mais|elegível|grátis por|meses grátis|trial|experimente|black friday|cyber monday|semana do consumidor|você ganhou|ganhe|cupom/i
+  if (promoSubject.test(subject)) return true
+
+  return false
+}
+
+// ──────────────────────────────────────────────────────────────────────
 // Parse single message → transaction or null
 // ──────────────────────────────────────────────────────────────────────
 function parseMessage(msg: any): ParsedTransaction | null {
@@ -298,6 +264,10 @@ function parseMessage(msg: any): ParsedTransaction | null {
   const dateHeader = headers.find(h => h.name === 'Date')?.value || ''
 
   const body = extractText(msg.payload)
+
+  // Filter out marketing/promotional/declined emails
+  if (isPromotionalOrIrrelevant(msg, subject, body)) return null
+
   const combined = subject + '\n' + body
 
   const amount = extractBestAmount(combined)
@@ -402,11 +372,15 @@ serve(async (req) => {
       tokenRefreshed = true
     }
 
-    // FIX 4: Build query with date filter and paginate
+    // Build query with date filter and paginate
     const afterEpoch = Math.floor(Date.now() / 1000) - days * 24 * 60 * 60
-    const query = `(${GMAIL_QUERY}) after:${afterEpoch}`
+    const query = `(${GMAIL_QUERY}) after:${afterEpoch} -category:promotions -category:social`
 
-    const ids = await listAllMessages(accessToken, query, 200)
+    console.log('[parse-gmail] Query length:', query.length, 'days:', days)
+
+    const ids = await listAllMessages(accessToken, query, 500)
+
+    console.log('[parse-gmail] Gmail returned', ids.length, 'message IDs')
 
     // If token expired mid-request, refresh and retry listing
     if (ids.length === 0 && provider_refresh_token && !tokenRefreshed) {
