@@ -12,23 +12,37 @@ interface ParsedTransaction {
   category: string
   date: string
   source: string
+  source_id: string
+  confidence: 'high' | 'medium' | 'low'
+  installment?: { current: number; total: number }
+  isRecurring?: boolean
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// Gmail search query — broad keywords (no subject: prefix so Gmail
-// searches subject + body + sender). Short enough to avoid URL limits.
-// parseMessage filters out emails with no R$ value anyway.
+// Gmail search queries — split into two strategies:
+// 1. Known bank senders (high precision, always financial)
+// 2. Keyword-based (broader, relies on parseMessage to filter noise)
 // ──────────────────────────────────────────────────────────────────────
-const GMAIL_QUERY = [
+const BANK_SENDERS = [
+  'nubank.com.br', 'inter.co', 'itau.com.br', 'itau-unibanco.com.br',
+  'bradesco.com.br', 'santander.com.br', 'bb.com.br', 'caixa.gov.br',
+  'bancointer.com.br', 'c6bank.com.br', 'mercadopago.com',
+  'picpay.com', 'pagseguro.com.br', 'stone.com.br', 'sicredi.com.br',
+  'sicoob.com.br', 'banrisul.com.br', 'safra.com.br', 'btg.com',
+  'neon.com.br', 'will.com.vc', 'next.me',
+  'xpi.com.br', 'btgpactual.com', 'cora.com.br',
+  'contasimples.com.br', 'warren.com.br', 'modal.com.br', 'sofisa.com.br',
+]
+const BANK_QUERY = BANK_SENDERS.map(d => `from:${d}`).join(' OR ')
+
+const KEYWORD_QUERY = [
   'pix', 'boleto', 'fatura', 'pagamento', 'transferencia',
   'transferência', 'comprovante', 'cobrança', 'cobranca',
   'extrato', 'recebido', 'creditado', 'debitado',
   'parcela', 'vencimento', 'emprestimo', 'empréstimo',
   'financiamento', 'mensalidade', 'assinatura', 'aluguel',
   'serasa', 'divida', 'dívida', 'negativacao',
-  'nota fiscal', 'nfe', 'nubank', 'inter bank',
-  'itau', 'bradesco', 'santander', 'mercado pago',
-  'picpay', 'pagseguro', 'c6bank',
+  'nota fiscal', 'nfe',
 ].map(t => (t.includes(' ') ? `"${t}"` : t)).join(' OR ')
 
 // ──────────────────────────────────────────────────────────────────────
@@ -116,7 +130,7 @@ interface ValueCandidate {
   score: number
 }
 
-function extractBestAmount(text: string): number {
+function extractBestAmount(text: string): { value: number; score: number } {
   const lines = text.split('\n')
   const candidates: ValueCandidate[] = []
 
@@ -143,13 +157,12 @@ function extractBestAmount(text: string): number {
     }
   }
 
-  // Medium-priority: R$ anywhere
+  // Medium-priority: R$ with cents (1.234,56)
   const rsBrPattern = /R\$\s*([\d]{1,3}(?:\.\d{3})*,\d{2})/g
   let m: RegExpExecArray | null
   while ((m = rsBrPattern.exec(text)) !== null) {
     const val = parseFloat(m[1].replace(/\./g, '').replace(',', '.'))
     if (val > 0 && val < 10_000_000) {
-      // Bonus if on a line with "total"
       const lineStart = text.lastIndexOf('\n', m.index)
       const lineEnd = text.indexOf('\n', m.index)
       const line = text.slice(lineStart, lineEnd).toLowerCase()
@@ -158,11 +171,45 @@ function extractBestAmount(text: string): number {
     }
   }
 
-  if (candidates.length === 0) return 0
+  // R$ without cents (R$ 1.234 or R$ 150)
+  const rsNoCentsPattern = /R\$\s*([\d]{1,3}(?:\.\d{3})*)(?![,\d])/g
+  while ((m = rsNoCentsPattern.exec(text)) !== null) {
+    const val = parseFloat(m[1].replace(/\./g, ''))
+    if (val > 0 && val < 10_000_000) {
+      candidates.push({ value: val, score: 3 })
+    }
+  }
+
+  // "1.234,56 reais" (no R$ prefix)
+  const reaisPattern = /([\d]{1,3}(?:\.\d{3})*,\d{2})\s*reais/gi
+  while ((m = reaisPattern.exec(text)) !== null) {
+    const val = parseFloat(m[1].replace(/\./g, '').replace(',', '.'))
+    if (val > 0 && val < 10_000_000) {
+      candidates.push({ value: val, score: 4 })
+    }
+  }
+
+  // USD/EUR for international subscriptions (US$ 9.99, USD 29.90, € 14,99)
+  const usdPattern = /(?:US\$|USD)\s*([\d]{1,6}(?:[.,]\d{2})?)/gi
+  while ((m = usdPattern.exec(text)) !== null) {
+    const val = parseFloat(m[1].replace(',', '.'))
+    if (val > 0 && val < 100_000) {
+      candidates.push({ value: val, score: 3 })
+    }
+  }
+  const eurPattern = /€\s*([\d]{1,6}(?:[.,]\d{2})?)/g
+  while ((m = eurPattern.exec(text)) !== null) {
+    const val = parseFloat(m[1].replace(',', '.'))
+    if (val > 0 && val < 100_000) {
+      candidates.push({ value: val, score: 3 })
+    }
+  }
+
+  if (candidates.length === 0) return { value: 0, score: 0 }
 
   // Return value with highest score (ties broken by largest value)
   candidates.sort((a, b) => b.score - a.score || b.value - a.value)
-  return candidates[0].value
+  return candidates[0]
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -185,26 +232,225 @@ function detectType(subject: string, body: string): 'income' | 'expense' {
   ]
   const inc = incomeSignals.filter(s => combined.includes(s)).length
   const exp = expenseSignals.filter(s => combined.includes(s)).length
-  return inc >= exp ? 'income' : 'expense'
+  // Default to expense on tie — most financial emails are bills/payments
+  return inc > exp ? 'income' : 'expense'
 }
 
 // ──────────────────────────────────────────────────────────────────────
 // Auto-categorize
 // ──────────────────────────────────────────────────────────────────────
+// Categories must match TRANSACTION_CATEGORIES in the frontend:
+// Vendas, Fornecedores, Fixo, Variável, Receita, Salários, Aluguel, Serviços, Marketing, Impostos, Outros
 function detectCategory(text: string): string {
   const t = text.toLowerCase()
-  if (/aluguel|locação|condomínio|iptu|ipva/.test(t)) return 'Fixo'
-  if (/energia|luz|água|internet|telefone|gás|celular/.test(t)) return 'Utilidades'
-  if (/empréstimo|financiamento|parcela|carnê|dívida|renegoci|serasa|spc|negativação/.test(t)) return 'Dívidas'
-  if (/cartão de crédito|fatura mínima|pagamento mínimo/.test(t)) return 'Dívidas'
+  if (/aluguel|locação|condomínio/.test(t)) return 'Aluguel'
+  if (/iptu|ipva|energia|luz|água|internet|telefone|gás|celular/.test(t)) return 'Fixo'
+  if (/empréstimo|financiamento|parcela|carnê|dívida|renegoci|serasa|spc|negativação/.test(t)) return 'Fixo'
+  if (/cartão de crédito|fatura mínima|pagamento mínimo/.test(t)) return 'Fixo'
   if (/assinatura|mensalidade|renovação|plano/.test(t)) return 'Fixo'
   if (/fornecedor|material|insumo|compra de produto/.test(t)) return 'Fornecedores'
   if (/cliente|serviço prestado|venda|receita|repasse/.test(t)) return 'Vendas'
-  if (/salário|prolabore|pró-labore|funcionário|folha/.test(t)) return 'Pessoal'
+  if (/salário|prolabore|pró-labore|funcionário|folha/.test(t)) return 'Salários'
   if (/imposto|das|simples|inss|irpj|cofins|pis|iss/.test(t)) return 'Impostos'
-  if (/manutenção|reparo|conserto/.test(t)) return 'Manutenção'
+  if (/manutenção|reparo|conserto/.test(t)) return 'Serviços'
   if (/marketing|publicidade|anúncio/.test(t)) return 'Marketing'
   return 'Outros'
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Bank-specific parsers — template-based extraction, always confidence:high
+// Falls back to generic parser if pattern doesn't match
+// ──────────────────────────────────────────────────────────────────────
+interface BankParseResult {
+  amount: number
+  type: 'income' | 'expense'
+  description: string
+  category: string
+}
+
+// Quick R$ extractor: labeled value > first R$ match
+function extractAmountSimple(text: string): number {
+  const labeled = /(?:valor|total)[:\s]+R\$\s*([\d]{1,3}(?:\.\d{3})*,\d{2})/i.exec(text)
+  if (labeled) return parseFloat(labeled[1].replace(/\./g, '').replace(',', '.'))
+  const m = /R\$\s*([\d]{1,3}(?:\.\d{3})*,\d{2})/i.exec(text)
+  return m ? parseFloat(m[1].replace(/\./g, '').replace(',', '.')) : 0
+}
+
+function parseNubank(sub: string, body: string): BankParseResult | null {
+  const text = sub + ' ' + body
+  if (/recebeu.*pix|pix.*recebid/i.test(text)) {
+    const amount = extractAmountSimple(body)
+    if (!amount) return null
+    const name = /(?:de|pagador)[:\s]+([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+){0,3})/i.exec(body)
+    return { amount, type: 'income', description: name ? `PIX de ${name[1].trim()}` : 'PIX recebido Nubank', category: 'Receita' }
+  }
+  if (/fez.*pix|pix.*enviado|enviou.*pix/i.test(text)) {
+    const amount = extractAmountSimple(body)
+    if (!amount) return null
+    const name = /(?:para|destinat[áa]rio)[:\s]+([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+){0,3})/i.exec(body)
+    return { amount, type: 'expense', description: name ? `PIX para ${name[1].trim()}` : 'PIX enviado Nubank', category: 'Outros' }
+  }
+  if (/compra\s+aprovada/i.test(text)) {
+    const amount = extractAmountSimple(body)
+    if (!amount) return null
+    const merchant = /(?:em|no|na)\s+([A-ZÀ-Ú][A-ZÀ-Ú0-9\s\*]{2,30}?)(?:\s+(?:por|R\$)|\n)/i.exec(body)
+    const desc = merchant ? merchant[1].trim() : 'Compra Nubank'
+    return { amount, type: 'expense', description: desc, category: detectCategory(desc) }
+  }
+  if (/fatura.*fech|fechamento.*fatura/i.test(text)) {
+    const amount = extractAmountSimple(body)
+    if (!amount) return null
+    return { amount, type: 'expense', description: 'Fatura Nubank', category: 'Fixo' }
+  }
+  return null
+}
+
+function parseInter(sub: string, body: string): BankParseResult | null {
+  const text = sub + ' ' + body
+  if (/pix\s+recebid|transfer[êe]ncia.*recebida/i.test(text)) {
+    const labeled = /valor[:\s]+R\$\s*([\d.]+,\d{2})/i.exec(body)
+    const amount = labeled ? parseFloat(labeled[1].replace(/\./g, '').replace(',', '.')) : extractAmountSimple(body)
+    if (!amount) return null
+    const name = /(?:de|pagador|remetente)[:\s]+([A-ZÀ-Ú][^\n]{2,40}?)(?:\n|CPF|CNPJ|$)/i.exec(body)
+    return { amount, type: 'income', description: name ? `PIX de ${name[1].trim()}` : 'PIX recebido Inter', category: 'Receita' }
+  }
+  if (/pix\s+(?:realizado|enviado)|transfer[êe]ncia.*(?:realizada|enviada)/i.test(text)) {
+    const labeled = /valor[:\s]+R\$\s*([\d.]+,\d{2})/i.exec(body)
+    const amount = labeled ? parseFloat(labeled[1].replace(/\./g, '').replace(',', '.')) : extractAmountSimple(body)
+    if (!amount) return null
+    const name = /(?:para|favorecido|destinat[áa]rio)[:\s]+([A-ZÀ-Ú][^\n]{2,40}?)(?:\n|CPF|CNPJ|$)/i.exec(body)
+    return { amount, type: 'expense', description: name ? `PIX para ${name[1].trim()}` : 'PIX enviado Inter', category: 'Outros' }
+  }
+  return null
+}
+
+function parseItau(sub: string, body: string): BankParseResult | null {
+  const text = sub + ' ' + body
+  if (/pix\s+recebid/i.test(text)) {
+    const amount = extractAmountSimple(body)
+    if (!amount) return null
+    const name = /(?:de|remetente)[:\s]+([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+){0,3})/i.exec(body)
+    return { amount, type: 'income', description: name ? `PIX de ${name[1].trim()}` : 'PIX recebido Itaú', category: 'Receita' }
+  }
+  if (/transfer[êe]ncia.*(?:pix|ted|doc).*(?:realizada|enviada|efetuada)/i.test(text)) {
+    const amount = extractAmountSimple(body)
+    if (!amount) return null
+    return { amount, type: 'expense', description: 'Transferência Itaú', category: 'Outros' }
+  }
+  if (/boleto.*pago|pagamento.*boleto/i.test(text)) {
+    const amount = extractAmountSimple(body)
+    if (!amount) return null
+    return { amount, type: 'expense', description: 'Boleto pago Itaú', category: 'Fixo' }
+  }
+  return null
+}
+
+function parsePicPay(sub: string, body: string): BankParseResult | null {
+  const text = sub + ' ' + body
+  if (/voc[eê]\s+recebeu|pagamento\s+recebido/i.test(text)) {
+    const amount = extractAmountSimple(body)
+    if (!amount) return null
+    const name = /(?:de|pagador)[:\s]+([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+){0,3})/i.exec(body)
+    return { amount, type: 'income', description: name ? `PIX de ${name[1].trim()}` : 'Recebimento PicPay', category: 'Receita' }
+  }
+  if (/voc[eê]\s+(?:pagou|enviou)|pagamento\s+(?:realizado|enviado)/i.test(text)) {
+    const amount = extractAmountSimple(body)
+    if (!amount) return null
+    const name = /(?:para|destinat[áa]rio)[:\s]+([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+){0,3})/i.exec(body)
+    return { amount, type: 'expense', description: name ? `PIX para ${name[1].trim()}` : 'Pagamento PicPay', category: 'Outros' }
+  }
+  return null
+}
+
+function parseBradesco(sub: string, body: string): BankParseResult | null {
+  const text = sub + ' ' + body
+  if (/pix\s+recebido|voc[eê]\s+recebeu.*pix|transfer[êe]ncia.*recebida/i.test(text)) {
+    const amount = extractAmountSimple(body)
+    if (!amount) return null
+    const name = /(?:de|remetente|pagador)[:\s]+([A-ZÀ-Ú][^\n]{2,40}?)(?:\n|CPF|CNPJ|$)/i.exec(body)
+    return { amount, type: 'income', description: name ? `PIX de ${name[1].trim()}` : 'PIX recebido Bradesco', category: 'Receita' }
+  }
+  if (/pix\s+(?:realizado|enviado)|transfer[êe]ncia.*(?:realizada|enviada)/i.test(text)) {
+    const amount = extractAmountSimple(body)
+    if (!amount) return null
+    const name = /(?:para|favorecido|destinat[áa]rio)[:\s]+([A-ZÀ-Ú][^\n]{2,40}?)(?:\n|CPF|CNPJ|$)/i.exec(body)
+    return { amount, type: 'expense', description: name ? `PIX para ${name[1].trim()}` : 'PIX enviado Bradesco', category: 'Outros' }
+  }
+  if (/boleto.*pago|pagamento.*efetuado|d[ée]bito.*conta/i.test(text)) {
+    const amount = extractAmountSimple(body)
+    if (!amount) return null
+    return { amount, type: 'expense', description: 'Pagamento Bradesco', category: 'Fixo' }
+  }
+  return null
+}
+
+function parseSantander(sub: string, body: string): BankParseResult | null {
+  const text = sub + ' ' + body
+  if (/pix\s+recebido|recebeu.*pix/i.test(text)) {
+    const amount = extractAmountSimple(body)
+    if (!amount) return null
+    const name = /(?:de|remetente)[:\s]+([A-ZÀ-Ú][^\n]{2,40}?)(?:\n|CPF|CNPJ|$)/i.exec(body)
+    return { amount, type: 'income', description: name ? `PIX de ${name[1].trim()}` : 'PIX recebido Santander', category: 'Receita' }
+  }
+  if (/pix\s+(?:enviado|realizado)|transfer[êe]ncia.*realizada/i.test(text)) {
+    const amount = extractAmountSimple(body)
+    if (!amount) return null
+    const name = /(?:para|destinat[áa]rio)[:\s]+([A-ZÀ-Ú][^\n]{2,40}?)(?:\n|CPF|CNPJ|$)/i.exec(body)
+    return { amount, type: 'expense', description: name ? `PIX para ${name[1].trim()}` : 'PIX enviado Santander', category: 'Outros' }
+  }
+  if (/fatura.*cart[ãa]o|pagamento.*fatura/i.test(text)) {
+    const amount = extractAmountSimple(body)
+    if (!amount) return null
+    return { amount, type: 'expense', description: 'Fatura Santander', category: 'Fixo' }
+  }
+  return null
+}
+
+function parseC6Bank(sub: string, body: string): BankParseResult | null {
+  const text = sub + ' ' + body
+  if (/pix\s+recebido|voc[eê]\s+recebeu/i.test(text)) {
+    const amount = extractAmountSimple(body)
+    if (!amount) return null
+    const name = /(?:de|remetente)[:\s]+([A-ZÀ-Ú][^\n]{2,40}?)(?:\n|CPF|CNPJ|$)/i.exec(body)
+    return { amount, type: 'income', description: name ? `PIX de ${name[1].trim()}` : 'PIX recebido C6 Bank', category: 'Receita' }
+  }
+  if (/pix\s+enviado|voc[eê]\s+(?:enviou|fez\s+um\s+pix)/i.test(text)) {
+    const amount = extractAmountSimple(body)
+    if (!amount) return null
+    const name = /(?:para|destinat[áa]rio)[:\s]+([A-ZÀ-Ú][^\n]{2,40}?)(?:\n|CPF|CNPJ|$)/i.exec(body)
+    return { amount, type: 'expense', description: name ? `PIX para ${name[1].trim()}` : 'PIX enviado C6 Bank', category: 'Outros' }
+  }
+  return null
+}
+
+function parseMercadoPago(sub: string, body: string): BankParseResult | null {
+  const text = sub + ' ' + body
+  if (/voc[eê]\s+recebeu|pagamento\s+recebido|dinheiro\s+recebido/i.test(text)) {
+    const amount = extractAmountSimple(body)
+    if (!amount) return null
+    const name = /(?:de|pagador|remetente)[:\s]+([A-ZÀ-Ú][^\n]{2,40}?)(?:\n|CPF|CNPJ|$)/i.exec(body)
+    return { amount, type: 'income', description: name ? `Recebimento de ${name[1].trim()}` : 'Recebimento Mercado Pago', category: 'Receita' }
+  }
+  if (/voc[eê]\s+(?:pagou|fez\s+um\s+pagamento)|pagamento\s+(?:aprovado|realizado)/i.test(text)) {
+    const amount = extractAmountSimple(body)
+    if (!amount) return null
+    const name = /(?:para|destinat[áa]rio|loja)[:\s]+([A-ZÀ-Ú][^\n]{2,40}?)(?:\n|CPF|CNPJ|$)/i.exec(body)
+    return { amount, type: 'expense', description: name ? `Pagamento ${name[1].trim()}` : 'Pagamento Mercado Pago', category: 'Outros' }
+  }
+  return null
+}
+
+const BANK_SPECIFIC_PARSERS: Record<string, (sub: string, body: string) => BankParseResult | null> = {
+  'nubank.com.br': parseNubank,
+  'inter.co': parseInter,
+  'bancointer.com.br': parseInter,
+  'itau.com.br': parseItau,
+  'itau-unibanco.com.br': parseItau,
+  'picpay.com': parsePicPay,
+  'bradesco.com.br': parseBradesco,
+  'santander.com.br': parseSantander,
+  'c6bank.com.br': parseC6Bank,
+  'mercadopago.com': parseMercadoPago,
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -255,46 +501,479 @@ function isPromotionalOrIrrelevant(msg: any, subject: string, body: string): boo
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// Parse single message → transaction or null
+// Extract a rich description from the email body
+// Tries to find: PIX recipient/sender, establishment, boleto issuer
 // ──────────────────────────────────────────────────────────────────────
-function parseMessage(msg: any): ParsedTransaction | null {
+function extractRichDescription(subject: string, body: string, senderName: string): string {
+  const text = body.toLowerCase()
+
+  // PIX: "pix para João Silva" / "pix de Maria Santos"
+  const pixTo = /pix\s+(?:para|enviado\s+para|destinat[áa]rio)[:\s]+([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+){0,3})/i.exec(body)
+  if (pixTo) return `PIX para ${pixTo[1].trim()}`
+
+  const pixFrom = /pix\s+(?:de|recebido\s+de|remetente|pagador)[:\s]+([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+){0,3})/i.exec(body)
+  if (pixFrom) return `PIX de ${pixFrom[1].trim()}`
+
+  // Boleto: "boleto CPFL Energia" / "pagamento de boleto - Vivo"
+  const boleto = /boleto\s+(?:de\s+|para\s+|-\s*)?([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+){0,3})/i.exec(body)
+  if (boleto) return `Boleto ${boleto[1].trim()}`
+
+  // Fatura: "fatura do cartão Nubank" / "fatura Mastercard"
+  const fatura = /fatura\s+(?:do\s+cart[ãa]o\s+)?(?:de\s+cr[ée]dito\s+)?([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+){0,2})/i.exec(body)
+  if (fatura) return `Fatura ${fatura[1].trim()}`
+
+  // NF-e: "nota fiscal" + "razão social" or company name
+  const nfe = /(?:raz[ãa]o\s+social|emitente|prestador)[:\s]+([A-ZÀ-Ú][^\n,]{3,40})/i.exec(body)
+  if (nfe && /nota\s+fiscal|nfe|nf-e/i.test(text)) return `NF-e ${nfe[1].trim()}`
+
+  // Transferência: "transferência para/de Fulano"
+  const transf = /transfer[êe]ncia\s+(?:para|de|recebida\s+de)[:\s]+([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+){0,3})/i.exec(body)
+  if (transf) return `Transferência ${transf[1].trim()}`
+
+  // Assinatura/Mensalidade
+  if (/assinatura|mensalidade|renovação|subscription/i.test(text)) {
+    return `Assinatura ${senderName}`.substring(0, 80)
+  }
+
+  // Fallback: subject (cleaned up)
+  const cleanSubject = subject
+    .replace(/^(fwd?|re|enc):\s*/i, '')
+    .replace(/\[.*?\]/g, '')
+    .trim()
+
+  return (cleanSubject || senderName || 'E-mail financeiro').substring(0, 80)
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Detect installment patterns: "Parcela 3/12", "3 de 12", "03/12"
+// ──────────────────────────────────────────────────────────────────────
+function detectInstallment(text: string): { current: number; total: number } | undefined {
+  const patterns = [
+    /parcela\s+(\d{1,2})\s*(?:\/|de)\s*(\d{1,2})/i,
+    /(\d{1,2})\s*(?:\/|de)\s*(\d{1,2})\s*parcela/i,
+    /(\d{1,2})ª?\s*parcela\s+(?:de|\/)\s*(\d{1,2})/i,
+  ]
+  for (const re of patterns) {
+    const m = re.exec(text)
+    if (m) {
+      const current = parseInt(m[1])
+      const total = parseInt(m[2])
+      if (current > 0 && total > 1 && current <= total && total <= 72) {
+        return { current, total }
+      }
+    }
+  }
+  return undefined
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Extract a relevant date from email body (due date, payment date, etc.)
+// Falls back to null if nothing found — caller uses email header date.
+// ──────────────────────────────────────────────────────────────────────
+function extractRelevantDate(text: string): string | null {
+  // Patterns ordered by relevance: due date > payment date > competence
+  const patterns = [
+    // "vencimento: 15/03/2026" or "vencimento em 15/03/2026"
+    /vencimento[:\s]+(?:em\s+)?(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/i,
+    // "data de pagamento: 15/03/2026"
+    /data\s+(?:de\s+)?pagamento[:\s]+(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/i,
+    // "pago em 15/03/2026"
+    /pago\s+em[:\s]+(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/i,
+    // "realizado em 15/03/2026" / "efetuado em 15/03/2026"
+    /(?:realizado|efetuado|processado)\s+em[:\s]+(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/i,
+    // "data: 15/03/2026" (generic but labeled)
+    /\bdata[:\s]+(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/i,
+    // "competência: 03/2026" (month/year only — use 1st of month)
+    /compet[êe]ncia[:\s]+(\d{1,2})[\/\-.](\d{2,4})/i,
+  ]
+
+  for (const re of patterns) {
+    const m = re.exec(text)
+    if (!m) continue
+
+    // Handle competência (MM/YYYY) — only 2 capture groups
+    if (m.length === 3) {
+      const month = parseInt(m[1])
+      let year = parseInt(m[2])
+      if (year < 100) year += 2000
+      if (month >= 1 && month <= 12 && year >= 2020 && year <= 2100) {
+        return new Date(year, month - 1, 1).toISOString()
+      }
+      continue
+    }
+
+    // DD/MM/YYYY
+    const day = parseInt(m[1])
+    const month = parseInt(m[2])
+    let year = parseInt(m[3])
+    if (year < 100) year += 2000
+
+    if (day >= 1 && day <= 31 && month >= 1 && month <= 12 && year >= 2020 && year <= 2100) {
+      const d = new Date(year, month - 1, day)
+      if (!isNaN(d.getTime())) return d.toISOString()
+    }
+  }
+
+  return null
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Parse credit card statement — extract individual purchases
+// Returns multiple transactions if line items found, otherwise null
+// ──────────────────────────────────────────────────────────────────────
+function parseCreditCardStatement(body: string, msgId: string, date: string, senderName: string): ParsedTransaction[] | null {
+  const text = body.toLowerCase()
+
+  // Only trigger for credit card statements
+  if (!/fatura|extrato.*cart[ãa]o|cart[ãa]o.*cr[ée]dito/i.test(text)) return null
+
+  // Look for line items: "DESCRICAO    R$ 123,45" or "DESCRICAO  123,45"
+  // Common patterns in bank statement emails
+  const lineItemPatterns = [
+    // "ESTABELECIMENTO    R$ 123,45" or "ESTABELECIMENTO  123,45"
+    /^[\s]*([A-ZÀ-Ú][A-ZÀ-Ú0-9\s\-\*\.\/]{3,40}?)\s{2,}R?\$?\s*([\d]{1,3}(?:\.\d{3})*,\d{2})\s*$/gim,
+    // "dd/mm  ESTABELECIMENTO  R$ 123,45"
+    /^\s*\d{2}\/\d{2}\s+([A-ZÀ-Ú][A-ZÀ-Ú0-9\s\-\*\.\/]{3,40}?)\s{2,}R?\$?\s*([\d]{1,3}(?:\.\d{3})*,\d{2})\s*$/gim,
+  ]
+
+  const items: ParsedTransaction[] = []
+  const seen = new Set<string>()
+  let idx = 0
+
+  for (const pattern of lineItemPatterns) {
+    let match: RegExpExecArray | null
+    while ((match = pattern.exec(body)) !== null) {
+      const desc = match[1].trim().replace(/\s{2,}/g, ' ')
+      const val = parseFloat(match[2].replace(/\./g, '').replace(',', '.'))
+
+      // Skip headers, totals, and noise
+      if (val < 1 || val > 500_000) continue
+      if (/total|subtotal|pagamento|cr[ée]dito|saldo|limite|disponível|mínimo/i.test(desc)) continue
+      if (desc.length < 3) continue
+
+      // Skip duplicates across patterns
+      const dedupeKey = `${desc.toLowerCase()}:${val}`
+      if (seen.has(dedupeKey)) continue
+      seen.add(dedupeKey)
+
+      items.push({
+        type: 'expense',
+        amount: val,
+        description: desc.substring(0, 80),
+        category: detectCategory(desc),
+        date,
+        source: `Gmail: ${senderName} (fatura)`,
+        source_id: `gmail:${msgId}:item${idx++}`,
+        confidence: 'medium',
+      })
+    }
+  }
+
+  // Only return if we found at least 2 items (otherwise it's not really a statement)
+  return items.length >= 2 ? items : null
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// PDF attachment support
+// Extracts text from PDF attachments (boletos, NF-e, receipts)
+// Works for text-based PDFs; compressed/scanned PDFs fall back gracefully
+// ──────────────────────────────────────────────────────────────────────
+function findPDFParts(payload: any): any[] {
+  if (!payload) return []
+  const parts: any[] = []
+  if (payload.mimeType === 'application/pdf' && payload.body?.attachmentId) {
+    parts.push(payload)
+  }
+  if (payload.parts) {
+    for (const part of payload.parts) {
+      parts.push(...findPDFParts(part))
+    }
+  }
+  return parts
+}
+
+function decodePDFOctal(s: string): string {
+  return s
+    .replace(/\\(\d{3})/g, (_, oct) => String.fromCharCode(parseInt(oct, 8)))
+    .replace(/\\n/g, '\n').replace(/\\r/g, '\r').replace(/\\t/g, '\t')
+    .replace(/\\\\/g, '\\').replace(/\\([()\s])/g, '$1')
+}
+
+function extractTextFromPDF(bytes: Uint8Array): string {
+  const raw = new TextDecoder('latin1').decode(bytes)
+  const texts: string[] = []
+
+  // Extract text inside BT … ET blocks (standard PDF text operators)
+  const btEt = /BT([\s\S]*?)ET/g
+  let block: RegExpExecArray | null
+  while ((block = btEt.exec(raw)) !== null) {
+    const content = block[1]
+    // (text) Tj
+    const tj = /\(([^)\\]*(?:\\.[^)\\]*)*)\)\s*Tj/g
+    let m: RegExpExecArray | null
+    while ((m = tj.exec(content)) !== null) {
+      const t = decodePDFOctal(m[1]).trim()
+      if (t) texts.push(t)
+    }
+    // [(text) kern …] TJ
+    const tjArr = /\[([\s\S]*?)\]\s*TJ/g
+    while ((m = tjArr.exec(content)) !== null) {
+      const strParts = /\(([^)\\]*(?:\\.[^)\\]*)*)\)/g
+      let s: RegExpExecArray | null
+      while ((s = strParts.exec(m[1])) !== null) {
+        const t = decodePDFOctal(s[1]).trim()
+        if (t) texts.push(t)
+      }
+    }
+  }
+
+  // Also scan raw bytes for financial patterns (catches some compressed PDFs)
+  const financialRe = [
+    /R\$\s*[\d.]+,\d{2}/g,
+    /\d{2}\/\d{2}\/\d{4}/g,
+    /vencimento[:\s]+\d{2}\/\d{2}\/\d{4}/gi,
+    /valor[:\s]+R?\$?\s*[\d.]+,\d{2}/gi,
+  ]
+  for (const re of financialRe) {
+    let m: RegExpExecArray | null
+    while ((m = re.exec(raw)) !== null) texts.push(m[0])
+  }
+
+  return texts.join(' ').replace(/\s+/g, ' ').trim()
+}
+
+async function fetchPDFAttachment(msgId: string, attachmentId: string, token: string): Promise<Uint8Array | null> {
+  try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 6000)
+    const res = await fetch(
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msgId}/attachments/${attachmentId}`,
+      { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal }
+    )
+    clearTimeout(timeout)
+    if (!res.ok) return null
+    const data = await res.json()
+    if (!data.data) return null
+    const base64 = data.data.replace(/-/g, '+').replace(/_/g, '/')
+    const binary = atob(base64)
+    const bytes = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+    return bytes
+  } catch {
+    return null
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// NF-e XML attachment support
+// Structured data: always high confidence, extracts value + emitter
+// ──────────────────────────────────────────────────────────────────────
+function findXMLParts(payload: any): any[] {
+  if (!payload) return []
+  const parts: any[] = []
+  const mime = payload.mimeType || ''
+  const filename = (payload.filename || '').toLowerCase()
+  if ((mime === 'application/xml' || mime === 'text/xml' ||
+       (mime === 'application/octet-stream' && filename.endsWith('.xml')))
+      && payload.body?.attachmentId) {
+    parts.push(payload)
+  }
+  if (payload.parts) {
+    for (const part of payload.parts) parts.push(...findXMLParts(part))
+  }
+  return parts
+}
+
+function parseNFeXML(xml: string): { amount: number; emitter: string; date: string | null } | null {
+  if (!/nfeProc|infNFe|NFe\s+xmlns/i.test(xml)) return null
+  const vNF = /<vNF>([\d.]+)<\/vNF>/i.exec(xml)
+  const amount = vNF ? parseFloat(vNF[1]) : 0
+  if (!amount || amount < 1) return null
+  const xNome = /<emit>[\s\S]{0,300}?<xNome>([^<]+)<\/xNome>/i.exec(xml)
+  const emitter = xNome ? xNome[1].trim() : ''
+  const dhEmi = /<dhEmi>([^<]{10,25})<\/dhEmi>/i.exec(xml)
+  let date: string | null = null
+  if (dhEmi) {
+    try {
+      const d = new Date(dhEmi[1])
+      if (!isNaN(d.getTime())) date = d.toISOString()
+    } catch { /* keep null */ }
+  }
+  return { amount, emitter, date }
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Parse single message → transaction(s)
+// Returns array: usually 1 item, but credit card statements can be many
+// ──────────────────────────────────────────────────────────────────────
+async function parseMessage(msg: any, accessToken: string): Promise<ParsedTransaction[]> {
   const headers: Array<{ name: string; value: string }> = msg.payload?.headers || []
   const subject = headers.find(h => h.name === 'Subject')?.value || ''
   const from = headers.find(h => h.name === 'From')?.value || ''
   const dateHeader = headers.find(h => h.name === 'Date')?.value || ''
 
-  const body = extractText(msg.payload)
+  let body = extractText(msg.payload)
 
   // Filter out marketing/promotional/declined emails
-  if (isPromotionalOrIrrelevant(msg, subject, body)) return null
+  if (isPromotionalOrIrrelevant(msg, subject, body)) return []
+
+  // NF-e XML attachments — structured data, highest confidence, return immediately
+  try {
+  const xmlParts = findXMLParts(msg.payload)
+  if (xmlParts.length > 0) {
+    for (const part of xmlParts.slice(0, 2)) {
+      const attachmentId = part.body?.attachmentId
+      if (!attachmentId) continue
+      const xmlBytes = await fetchPDFAttachment(msg.id, attachmentId, accessToken)
+      if (!xmlBytes) continue
+      const xmlText = new TextDecoder('utf-8', { fatal: false }).decode(xmlBytes)
+      const nfe = parseNFeXML(xmlText)
+      if (nfe && nfe.amount >= 1) {
+        const senderName = from.replace(/<.*>/, '').replace(/"/g, '').trim()
+        let date = nfe.date
+        if (!date) {
+          try {
+            const parsed = new Date(dateHeader)
+            if (!isNaN(parsed.getTime())) date = parsed.toISOString()
+          } catch { /* keep null */ }
+          if (!date) date = new Date().toISOString()
+        }
+        return [{
+          type: 'expense',
+          amount: nfe.amount,
+          description: nfe.emitter ? `NF-e ${nfe.emitter.substring(0, 60)}` : 'Nota Fiscal',
+          category: detectCategory(nfe.emitter || subject),
+          date,
+          source: `Gmail: ${senderName || from} (NF-e)`,
+          source_id: `gmail:${msg.id}:nfe`,
+          confidence: 'high' as const,
+        }]
+      }
+    }
+  }
+  } catch (e) { console.error('NF-e XML processing error:', e) }
+
+  // Augment body with PDF attachment text (boletos, NF-e, receipts)
+  try {
+  const pdfParts = findPDFParts(msg.payload)
+  if (pdfParts.length > 0) {
+    const part = pdfParts[0] // first PDF only per email
+    const attachmentId = part.body?.attachmentId
+    if (attachmentId) {
+      const pdfBytes = await fetchPDFAttachment(msg.id, attachmentId, accessToken)
+      if (pdfBytes) {
+        const pdfText = extractTextFromPDF(pdfBytes)
+        if (pdfText.length > 20) body = body + '\n' + pdfText
+      }
+    }
+  }
+  } catch (e) { console.error('PDF processing error:', e) }
 
   const combined = subject + '\n' + body
-
-  const amount = extractBestAmount(combined)
-  if (amount === 0) return null
-
   const senderName = from.replace(/<.*>/, '').replace(/"/g, '').trim()
-  const description = subject.substring(0, 80) || senderName || 'E-mail financeiro'
 
-  let date = new Date().toISOString()
-  try {
-    const parsed = new Date(dateHeader)
-    if (!isNaN(parsed.getTime())) date = parsed.toISOString()
-  } catch { /* keep default */ }
+  // Prefer date from body over email send date
+  let date = extractRelevantDate(combined)
+  if (!date) {
+    try {
+      const parsed = new Date(dateHeader)
+      if (!isNaN(parsed.getTime())) date = parsed.toISOString()
+    } catch { /* keep default */ }
+  }
+  if (!date) date = new Date().toISOString()
 
-  return {
+  // Try bank-specific parser first (always returns confidence:high)
+  const senderDomain = from.match(/@([\w.-]+)/)?.[1]?.toLowerCase() ?? ''
+  const bankParser = BANK_SPECIFIC_PARSERS[senderDomain]
+  if (bankParser) {
+    const bankResult = bankParser(subject, body)
+    if (bankResult && bankResult.amount > 0) {
+      return [{
+        type: bankResult.type,
+        amount: bankResult.amount,
+        description: bankResult.description,
+        category: bankResult.category,
+        date,
+        source: `Gmail: ${senderName || from}`,
+        source_id: `gmail:${msg.id}`,
+        confidence: 'high' as const,
+        installment: detectInstallment(combined),
+      }]
+    }
+  }
+
+  // Try to parse as credit card statement with individual items
+  const statementItems = parseCreditCardStatement(body, msg.id, date, senderName)
+  if (statementItems) return statementItems
+
+  // Standard single-transaction parsing
+  const { value: amount, score } = extractBestAmount(combined)
+  if (amount < 1) return [] // Filter micro-amounts (tarifas de centavos)
+
+  const description = extractRichDescription(subject, body, senderName)
+  const confidence: 'high' | 'medium' | 'low' = score >= 8 ? 'high' : score >= 5 ? 'medium' : 'low'
+  const installment = detectInstallment(combined)
+
+  const finalDescription = installment
+    ? `${description} (${installment.current}/${installment.total})`
+    : description
+
+  return [{
     type: detectType(subject, body),
     amount,
-    description,
+    description: finalDescription,
     category: detectCategory(combined),
     date,
     source: `Gmail: ${senderName || from}`,
-  }
+    source_id: `gmail:${msg.id}`,
+    confidence,
+    installment,
+  }]
 }
 
 // ──────────────────────────────────────────────────────────────────────
 // FIX 4: Fetch all pages (up to 200 messages) via nextPageToken
 // ──────────────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────────────
+// Recurrence detection — marks transactions that repeat across ≥3 months
+// Groups by rounded amount + first word of description
+// ──────────────────────────────────────────────────────────────────────
+function detectRecurring(transactions: ParsedTransaction[]): ParsedTransaction[] {
+  if (transactions.length < 3) return transactions
+
+  const groups = new Map<string, ParsedTransaction[]>()
+  for (const t of transactions) {
+    // Normalize description: strip installment "(3/12)", lowercase, first word
+    const firstWord = t.description
+      .replace(/\(.*?\)/g, '')
+      .trim()
+      .split(/\s+/)[0]
+      .toLowerCase()
+    const key = `${Math.round(t.amount)}:${firstWord}`
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key)!.push(t)
+  }
+
+  const recurringIds = new Set<string>()
+  for (const [, txs] of groups) {
+    if (txs.length < 3) continue
+    const months = new Set(txs.map(t => {
+      const d = new Date(t.date)
+      return `${d.getFullYear()}-${d.getMonth()}`
+    }))
+    if (months.size >= 3) {
+      txs.forEach(t => recurringIds.add(t.source_id))
+    }
+  }
+
+  if (recurringIds.size === 0) return transactions
+  return transactions.map(t =>
+    recurringIds.has(t.source_id)
+      ? { ...t, isRecurring: true, category: t.category === 'Outros' ? 'Fixo' : t.category }
+      : t
+  )
+}
+
 async function listAllMessages(token: string, query: string, maxTotal = 200): Promise<string[]> {
   const ids: string[] = []
   let pageToken: string | undefined
@@ -321,18 +1000,34 @@ async function listAllMessages(token: string, query: string, maxTotal = 200): Pr
   return ids.slice(0, maxTotal)
 }
 
-// Fetch messages in parallel batches to avoid timeouts
-async function fetchMessages(ids: string[], token: string, batchSize = 10): Promise<any[]> {
+// Fetch messages in parallel batches with timeout protection
+// Stops fetching if we're approaching the Edge Function time limit
+async function fetchMessages(ids: string[], token: string, batchSize = 10, timeLimitMs = 45000): Promise<any[]> {
   const results: any[] = []
+  const startTime = Date.now()
+
   for (let i = 0; i < ids.length; i += batchSize) {
+    // Stop if we're running out of time (keep 10s buffer for parsing + response)
+    if (Date.now() - startTime > timeLimitMs) {
+      console.log(`[parse-gmail] Time limit reached after ${results.length}/${ids.length} messages`)
+      break
+    }
+
     const batch = ids.slice(i, i + batchSize)
     const fetched = await Promise.all(
       batch.map(async (id) => {
-        const res = await fetch(
-          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=full`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        )
-        return res.ok ? res.json() : null
+        try {
+          const controller = new AbortController()
+          const timeout = setTimeout(() => controller.abort(), 8000)
+          const res = await fetch(
+            `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=full`,
+            { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal }
+          )
+          clearTimeout(timeout)
+          return res.ok ? res.json() : null
+        } catch {
+          return null
+        }
       })
     )
     results.push(...fetched.filter(Boolean))
@@ -372,22 +1067,32 @@ serve(async (req) => {
       tokenRefreshed = true
     }
 
-    // Build query with date filter and paginate
+    // Two-pass query: banks (high precision) + keywords (broader)
     const afterEpoch = Math.floor(Date.now() / 1000) - days * 24 * 60 * 60
-    const query = `(${GMAIL_QUERY}) after:${afterEpoch} -category:promotions -category:social`
+    const dateFilter = `after:${afterEpoch}`
+    const bankQuery = `(${BANK_QUERY}) ${dateFilter}`
+    const keywordQuery = `(${KEYWORD_QUERY}) ${dateFilter} -category:promotions -category:social`
 
-    console.log('[parse-gmail] Query length:', query.length, 'days:', days)
+    console.log('[parse-gmail] days:', days, 'bank senders:', BANK_SENDERS.length)
 
-    const ids = await listAllMessages(accessToken, query, 500)
+    // Run both queries in parallel for speed
+    const [bankIds, keywordIds] = await Promise.all([
+      listAllMessages(accessToken, bankQuery, 300),
+      listAllMessages(accessToken, keywordQuery, 300),
+    ])
 
-    console.log('[parse-gmail] Gmail returned', ids.length, 'message IDs')
+    // Merge and deduplicate IDs
+    const idSet = new Set([...bankIds, ...keywordIds])
+    const ids = Array.from(idSet)
 
-    // If token expired mid-request, refresh and retry listing
+    console.log('[parse-gmail] banks:', bankIds.length, 'keywords:', keywordIds.length, 'unique:', ids.length)
+
+    // If token expired mid-request, refresh and retry
     if (ids.length === 0 && provider_refresh_token && !tokenRefreshed) {
       const refreshed = await refreshGoogleToken(provider_refresh_token)
       if (refreshed) {
         accessToken = refreshed
-        const retryIds = await listAllMessages(accessToken, query, 200)
+        const retryIds = await listAllMessages(accessToken, keywordQuery, 200)
         ids.push(...retryIds)
         tokenRefreshed = true
       }
@@ -396,13 +1101,21 @@ serve(async (req) => {
     // Fetch full messages in parallel batches
     const messages = await fetchMessages(ids, accessToken)
 
-    const transactions: ParsedTransaction[] = []
+    const rawTransactions: ParsedTransaction[] = []
     for (const msg of messages) {
-      const parsed = parseMessage(msg)
-      if (parsed) transactions.push(parsed)
+      rawTransactions.push(...await parseMessage(msg, accessToken))
     }
 
-    // Sort by date desc
+    // Deduplicate by source_id (safety net for overlapping scans)
+    const seenIds = new Set<string>()
+    const uniqueRaw = rawTransactions.filter(t => {
+      if (seenIds.has(t.source_id)) return false
+      seenIds.add(t.source_id)
+      return true
+    })
+
+    // Detect recurring patterns and sort by date desc
+    const transactions = detectRecurring(uniqueRaw)
     transactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
     return new Response(

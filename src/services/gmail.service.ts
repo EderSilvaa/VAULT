@@ -14,7 +14,7 @@ export const gmailService = {
       provider: 'google',
       options: {
         scopes: 'https://www.googleapis.com/auth/gmail.readonly',
-        redirectTo: `${window.location.origin}/import`,
+        redirectTo: `${import.meta.env.VITE_APP_URL || window.location.origin}/import`,
         queryParams: {
           access_type: 'offline',
           prompt: 'consent',

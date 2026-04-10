@@ -8,6 +8,10 @@ export interface ImportedTransaction {
   type: 'income' | 'expense'
   category: string
   fitid?: string
+  source_id?: string
+  confidence?: 'high' | 'medium' | 'low'
+  installment?: { current: number; total: number }
+  isRecurring?: boolean
   raw?: any
 }
 

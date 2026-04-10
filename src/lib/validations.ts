@@ -23,6 +23,7 @@ export const transactionSchema = z.object({
     required_error: 'Categoria é obrigatória',
   }),
   date: z.string().optional(),
+  source_id: z.string().optional(),
 })
 
 export type TransactionInput = z.infer<typeof transactionSchema>

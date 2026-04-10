@@ -74,6 +74,7 @@ export const transactionsService = {
         description: input.description,
         category: input.category,
         date: input.date || new Date().toISOString(),
+        source_id: input.source_id || null,
       })
       .select()
       .single()
@@ -95,18 +96,38 @@ export const transactionsService = {
 
   /**
    * Create multiple transactions (Batch)
+   * Filters out duplicates by source_id before inserting.
    */
   async createTransactions(userId: string, inputs: TransactionInput[]): Promise<Transaction[]> {
+    // Deduplicate: check which source_ids already exist in DB
+    const sourceIds = inputs.map(i => i.source_id).filter(Boolean) as string[]
+    let existingSourceIds = new Set<string>()
+
+    if (sourceIds.length > 0) {
+      const { data: existing } = await supabase
+        .from('transactions')
+        .select('source_id')
+        .eq('user_id', userId)
+        .in('source_id', sourceIds)
+
+      existingSourceIds = new Set((existing ?? []).map((r: any) => r.source_id))
+    }
+
+    // Filter out already-imported transactions
+    const newInputs = inputs.filter(i => !i.source_id || !existingSourceIds.has(i.source_id))
+    if (newInputs.length === 0) return []
+
     const { data, error } = await supabase
       .from('transactions' as any)
       .insert(
-        inputs.map(input => ({
+        newInputs.map(input => ({
           user_id: userId,
           type: input.type,
           amount: input.amount,
           description: input.description,
           category: input.category,
           date: input.date || new Date().toISOString(),
+          source_id: input.source_id || null,
         }))
       )
       .select()
