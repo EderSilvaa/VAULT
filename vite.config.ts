@@ -30,16 +30,10 @@ export default defineConfig({
         manualChunks: (id) => {
           if (!id.includes('node_modules')) return undefined; // let Vite split app code via lazy()
 
-          if (id.includes('react-dom'))       return 'react-vendor';
-          if (id.includes('react-router'))    return 'react-vendor';
-          if (id.includes('react'))           return 'react-vendor';  // core react after dom/router
+          // Only split clearly independent vendor libs — let Vite handle the rest
           if (id.includes('@supabase'))       return 'supabase-vendor';
-          if (id.includes('recharts') || id.includes('d3-'))  return 'charts';
           if (id.includes('posthog'))         return 'posthog';
-          if (id.includes('react-hook-form') || id.includes('@hookform') || id.includes('zod')) return 'form-vendor';
-          if (id.includes('@radix-ui'))       return 'ui-vendor';
-          if (id.includes('@tanstack'))       return 'query-vendor';
-          if (id.includes('lucide-react'))    return 'icons';
+          if (id.includes('xlsx'))            return 'xlsx';
         },
       },
     },
