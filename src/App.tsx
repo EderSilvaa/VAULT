@@ -9,7 +9,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { LoadingFallback } from "@/components/LoadingFallback";
 import { usePageView } from "@/hooks/usePageView";
 
-// Lazy load all pages for better performance
+// Lazy load all pages — each becomes its own chunk
 const Onboarding = lazy(() => import("./pages/Onboarding"));
 const Simulator = lazy(() => import("./pages/Simulator"));
 const Results = lazy(() => import("./pages/Results"));
@@ -21,6 +21,20 @@ const Profile = lazy(() => import("./pages/Profile"));
 const TaxDashboard = lazy(() => import("./pages/TaxDashboard"));
 const Import = lazy(() => import("./pages/Import"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+
+// Prefetch critical routes after initial paint (Landing → Simulator → Results → Signup)
+if (typeof window !== "undefined") {
+  window.addEventListener("load", () => {
+    setTimeout(() => {
+      import("./pages/Simulator");
+      import("./pages/Login");
+    }, 2000);
+    setTimeout(() => {
+      import("./pages/Results");
+      import("./pages/Signup");
+    }, 4000);
+  }, { once: true });
+}
 
 /** Tracks pageviews — must be inside BrowserRouter */
 const PageViewTracker = ({ children }: { children: React.ReactNode }) => {
