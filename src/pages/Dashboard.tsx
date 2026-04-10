@@ -438,58 +438,114 @@ const Dashboard = () => {
               )}
 
               {/* ─── Main Chart ─── */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle className="text-base font-bold">Projeção de Caixa</CardTitle>
-                      <CardDescription className="text-xs">Próximos {projectionDays} dias</CardDescription>
-                    </div>
-                    <ExportReport data={prepareExportData()} />
-                  </div>
-                  <div className="flex gap-2 pt-2">
-                    {([30, 60, 120] as const).map((d) => (
-                      <Button key={d} variant={projectionDays === d ? "default" : "outline"} size="sm" onClick={() => setProjectionDays(d)} className="flex-1 text-xs">
-                        {d}d
-                      </Button>
-                    ))}
-                  </div>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <div className="h-[280px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={cashFlowData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                        <defs>
-                          <linearGradient id="colorBalance" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
-                            <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.1} vertical={false} />
-                        <XAxis dataKey="day" stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} axisLine={false} interval={projectionDays === 30 ? 4 : projectionDays === 60 ? 9 : 14} />
-                        <YAxis stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
-                        <Tooltip content={({ active, payload, label }) => active && payload?.length ? (
-                          <div className="rounded-lg border bg-popover/90 backdrop-blur p-2.5 shadow-lg">
-                            <p className="text-xs text-muted-foreground">Dia {label}</p>
-                            <p className="text-sm font-bold">{Number(payload[0].value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
-                          </div>
-                        ) : null} />
-                        <ReferenceLine y={0} stroke="hsl(var(--destructive))" strokeDasharray="5 5" strokeWidth={1} />
-                        <Area type="monotone" dataKey="balance" stroke="hsl(var(--primary))" strokeWidth={2} fill="url(#colorBalance)" animationDuration={1000} />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
+              {(() => {
+                const isNegativeBalance = currentBalance < 0
+                const monthlyExpenseTotal = totalExpenses || Math.abs(stats.monthlySavings)
+                const neededRevenue = isNegativeBalance
+                  ? monthlyExpenseTotal + Math.abs(currentBalance) / 6 // recover in 6 months
+                  : monthlyExpenseTotal - totalRevenue > 0 ? monthlyExpenseTotal : 0
+                const breakEvenRevenue = monthlyExpenseTotal // just to cover expenses
 
-                  {daysUntilZero > 0 && daysUntilZero < 60 && (
-                    <div className="mt-4 flex items-start gap-3 rounded-lg bg-destructive/10 border border-destructive/20 p-3">
-                      <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
-                      <p className="text-xs text-muted-foreground">
-                        Saldo zera em <span className="font-bold text-destructive">{daysUntilZero} dias</span> no ritmo atual. Reduza despesas ou antecipe recebíveis.
-                      </p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                // Build recovery scenario data
+                const recoveryData = cashFlowData.map(d => {
+                  const dailyRecovery = (neededRevenue - monthlyExpenseTotal) / 30
+                  return {
+                    ...d,
+                    recovery: Math.round(currentBalance + dailyRecovery * d.day),
+                  }
+                })
+
+                return (
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <CardTitle className="text-base font-bold">Projeção de Caixa</CardTitle>
+                          <CardDescription className="text-xs">Próximos {projectionDays} dias</CardDescription>
+                        </div>
+                        <ExportReport data={prepareExportData()} />
+                      </div>
+                      <div className="flex gap-2 pt-2">
+                        {([30, 60, 120] as const).map((d) => (
+                          <Button key={d} variant={projectionDays === d ? "default" : "outline"} size="sm" onClick={() => setProjectionDays(d)} className="flex-1 text-xs">
+                            {d}d
+                          </Button>
+                        ))}
+                      </div>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      <div className="h-[280px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={recoveryData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                            <defs>
+                              <linearGradient id="colorBalance" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor={isNegativeBalance ? "hsl(var(--destructive))" : "hsl(var(--primary))"} stopOpacity={0.2} />
+                                <stop offset="95%" stopColor={isNegativeBalance ? "hsl(var(--destructive))" : "hsl(var(--primary))"} stopOpacity={0} />
+                              </linearGradient>
+                              <linearGradient id="colorRecovery" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="hsl(142 76% 36%)" stopOpacity={0.15} />
+                                <stop offset="95%" stopColor="hsl(142 76% 36%)" stopOpacity={0} />
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.1} vertical={false} />
+                            <XAxis dataKey="day" stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} axisLine={false} interval={projectionDays === 30 ? 4 : projectionDays === 60 ? 9 : 14} />
+                            <YAxis stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => {
+                              const abs = Math.abs(v)
+                              const formatted = abs >= 1000 ? `${(abs / 1000).toFixed(0)}k` : String(abs)
+                              return v < 0 ? `-${formatted}` : formatted
+                            }} />
+                            <Tooltip content={({ active, payload, label }) => active && payload?.length ? (
+                              <div className="rounded-lg border bg-popover/90 backdrop-blur p-2.5 shadow-lg">
+                                <p className="text-xs text-muted-foreground">Dia {label}</p>
+                                <p className={`text-sm font-bold ${Number(payload[0].value) < 0 ? 'text-destructive' : ''}`}>
+                                  {Number(payload[0].value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                </p>
+                                {payload[1]?.value != null && (
+                                  <p className="text-xs text-green-600 mt-1">
+                                    Cenário com receita: {Number(payload[1].value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                  </p>
+                                )}
+                              </div>
+                            ) : null} />
+                            <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeDasharray="8 4" strokeWidth={1.5} label={{ value: 'Equilíbrio', position: 'right', fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+                            {isNegativeBalance && neededRevenue > 0 && (
+                              <Area type="monotone" dataKey="recovery" stroke="hsl(142 76% 36%)" strokeWidth={1.5} strokeDasharray="6 3" fill="url(#colorRecovery)" animationDuration={1000} />
+                            )}
+                            <Area type="monotone" dataKey="balance" stroke={isNegativeBalance ? "hsl(var(--destructive))" : "hsl(var(--primary))"} strokeWidth={2} fill="url(#colorBalance)" animationDuration={1000} />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+
+                      {/* ─── Actionable Insights ─── */}
+                      <div className="mt-4 space-y-2">
+                        {isNegativeBalance && (
+                          <div className="flex items-start gap-3 rounded-lg bg-destructive/10 border border-destructive/20 p-3">
+                            <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                            <div className="text-xs text-muted-foreground space-y-1">
+                              <p>
+                                <span className="font-semibold text-foreground">Linha vermelha:</span> ritmo atual sem receita.{' '}
+                                {neededRevenue > 0 && <><span className="font-semibold text-green-600">Linha verde:</span> cenário faturando R$ {neededRevenue.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}/mês.</>}
+                              </p>
+                              <p>
+                                Para cobrir despesas: mínimo <span className="font-bold text-foreground">R$ {breakEvenRevenue.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}/mês</span>.{' '}
+                                Para zerar dívida em 6 meses: <span className="font-bold text-foreground">R$ {neededRevenue.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}/mês</span>.
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                        {!isNegativeBalance && daysUntilZero > 0 && daysUntilZero < 60 && (
+                          <div className="flex items-start gap-3 rounded-lg bg-destructive/10 border border-destructive/20 p-3">
+                            <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                            <p className="text-xs text-muted-foreground">
+                              Saldo zera em <span className="font-bold text-destructive">{daysUntilZero} dias</span> no ritmo atual. Reduza despesas ou antecipe recebíveis.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )
+              })()}
             </>
           )}
 
