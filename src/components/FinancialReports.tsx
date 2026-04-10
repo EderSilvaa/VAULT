@@ -4,8 +4,6 @@ import { useFinancialReports, DRELineItem } from '@/hooks/useFinancialReports';
 import { Transaction } from '@/types';
 import { formatCurrency } from '@/lib/utils';
 import { FileText, TrendingDown, TrendingUp, DollarSign } from 'lucide-react';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 
 interface FinancialReportsProps {
     transactions: Transaction[];
@@ -45,7 +43,9 @@ export const FinancialReports = ({ transactions, currentDate = new Date() }: Fin
                             Relatórios Financeiros
                         </CardTitle>
                         <CardDescription>
-                            Análise detalhada de {format(currentDate, 'MMMM yyyy', { locale: ptBR })}
+                            {dreData.isEmpty
+                                ? 'Sem dados suficientes para gerar relatório'
+                                : `Análise detalhada de ${dreData.periodLabel}`}
                         </CardDescription>
                     </div>
                 </div>
@@ -129,26 +129,43 @@ export const FinancialReports = ({ transactions, currentDate = new Date() }: Fin
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-                            <div className="p-4 rounded-xl bg-primary/5 border border-primary/10">
-                                <p className="text-xs text-muted-foreground mb-1">Margem Bruta</p>
-                                <p className="text-xl font-bold text-primary sm:text-2xl">
-                                    {((dreData.grossProfit / dreData.netRevenue) * 100 || 0).toFixed(1)}%
-                                </p>
+                        {dreData.netRevenue > 0 ? (
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+                                <div className="p-4 rounded-xl bg-primary/5 border border-primary/10">
+                                    <p className="text-xs text-muted-foreground mb-1">Margem Bruta</p>
+                                    <p className="text-xl font-bold text-primary sm:text-2xl">
+                                        {((dreData.grossProfit / dreData.netRevenue) * 100).toFixed(1)}%
+                                    </p>
+                                </div>
+                                <div className="p-4 rounded-xl bg-primary/5 border border-primary/10">
+                                    <p className="text-xs text-muted-foreground mb-1">Margem Operacional</p>
+                                    <p className="text-xl font-bold text-primary sm:text-2xl">
+                                        {((dreData.ebitda / dreData.netRevenue) * 100).toFixed(1)}%
+                                    </p>
+                                </div>
+                                <div className="p-4 rounded-xl bg-primary/5 border border-primary/10">
+                                    <p className="text-xs text-muted-foreground mb-1">Margem Líquida</p>
+                                    <p className="text-xl font-bold text-primary sm:text-2xl">
+                                        {((dreData.netIncome / dreData.netRevenue) * 100).toFixed(1)}%
+                                    </p>
+                                </div>
                             </div>
-                            <div className="p-4 rounded-xl bg-primary/5 border border-primary/10">
-                                <p className="text-xs text-muted-foreground mb-1">Margem Operacional</p>
-                                <p className="text-xl font-bold text-primary sm:text-2xl">
-                                    {((dreData.operatingExpenses / dreData.netRevenue) * 100 || 0).toFixed(1)}%
-                                </p>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+                                <div className="p-4 rounded-xl bg-destructive/5 border border-destructive/10">
+                                    <p className="text-xs text-muted-foreground mb-1">Total de Despesas</p>
+                                    <p className="text-xl font-bold text-destructive sm:text-2xl">
+                                        {formatCurrency(dreData.operatingExpenses + dreData.variableCosts + dreData.deductions)}
+                                    </p>
+                                </div>
+                                <div className="p-4 rounded-xl bg-orange-500/5 border border-orange-500/10">
+                                    <p className="text-xs text-muted-foreground mb-1">Resultado</p>
+                                    <p className="text-xl font-bold text-orange-500 sm:text-2xl">
+                                        Sem receita no período
+                                    </p>
+                                </div>
                             </div>
-                            <div className="p-4 rounded-xl bg-primary/5 border border-primary/10">
-                                <p className="text-xs text-muted-foreground mb-1">Margem Líquida</p>
-                                <p className="text-xl font-bold text-primary sm:text-2xl">
-                                    {((dreData.netIncome / dreData.netRevenue) * 100 || 0).toFixed(1)}%
-                                </p>
-                            </div>
-                        </div>
+                        )}
                     </TabsContent>
 
                     <TabsContent value="cashflow">
