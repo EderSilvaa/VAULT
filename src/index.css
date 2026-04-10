@@ -110,29 +110,8 @@ All colors MUST be HSL.
 
 /* Mobile Performance Optimizations */
 @media (max-width: 767px) {
-  /* Disable heavy effects on mobile for better performance */
-  .backdrop-blur-xl {
-    backdrop-filter: none;
-    background-color: hsl(var(--card));
-  }
-
   /* Reduce shadows on mobile */
-  .shadow-2xl {
-    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-  }
-
-  /* Disable hover animations on mobile */
-  .hover\:-translate-y-1:hover {
-    transform: none;
-  }
-
-  /* Simplify gradients on mobile - except for special pages */
-  .bg-gradient-to-br:not(.mobile-gradient-preserve) {
-    background: hsl(var(--card));
-  }
-
-  /* Hide animated background elements to prevent flickering */
-  .animate-pulse-glow {
-    display: none;
+  .shadow-xl {
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.08);
   }
 }
