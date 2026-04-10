@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { posthog } from "@/lib/posthog";
+import { usePublicStats } from "@/hooks/usePublicStats";
 import { Button } from "@/components/ui/button";
 import {
   ArrowRight,
@@ -17,6 +18,9 @@ import {
   Brain,
   Upload,
   Smartphone,
+  Lock,
+  Shield,
+  Eye,
 } from "lucide-react";
 import Logo from "@/components/Logo";
 
@@ -126,6 +130,7 @@ const DashboardMockup = () => (
    ─────────────────────────────────────────── */
 const Onboarding = () => {
   const navigate = useNavigate();
+  const stats = usePublicStats();
 
   const scrollToSection = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
@@ -240,10 +245,11 @@ const Onboarding = () => {
           ══════════════════════════════════════ */}
       <section className="border-y border-border/40 bg-muted/20 relative z-10">
         <div className="container mx-auto px-4 sm:px-6 py-10 md:py-12">
-          <div className="grid grid-cols-3 gap-6 md:gap-12 max-w-3xl mx-auto text-center">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 md:gap-10 max-w-4xl mx-auto text-center">
             {[
+              { value: stats ? `${stats.totalUsers}+` : "—", label: "Usuários ativos" },
+              { value: stats ? `${stats.totalTransactions}+` : "—", label: "Transações analisadas" },
               { value: "4 sem", label: "Projeção antecipada" },
-              { value: "2 min", label: "Primeira análise" },
               { value: "100%", label: "Gratuito" },
             ].map((stat, i) => (
               <div key={i}>
@@ -495,6 +501,53 @@ const Onboarding = () => {
                 <p className="text-sm text-muted-foreground leading-relaxed">{b.desc}</p>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════
+          SECURITY / TRUST
+          ══════════════════════════════════════ */}
+      <section className="relative z-10 py-16 md:py-20 bg-muted/30">
+        <div className="container mx-auto px-4 sm:px-6">
+          <div className="max-w-4xl mx-auto">
+            <div className="text-center mb-10 md:mb-14">
+              <p className="text-xs font-bold text-primary uppercase tracking-wider mb-3">Segurança</p>
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-foreground tracking-tight">
+                Seus dados estão protegidos
+              </h2>
+              <p className="text-sm sm:text-base text-muted-foreground mt-3 max-w-lg mx-auto leading-relaxed">
+                Privacidade e segurança são prioridade absoluta na Vault
+              </p>
+            </div>
+
+            <div className="grid sm:grid-cols-3 gap-6 md:gap-8">
+              {[
+                {
+                  icon: Lock,
+                  title: "Criptografia ponta a ponta",
+                  desc: "Todos os seus dados financeiros são criptografados em trânsito e em repouso com AES-256.",
+                },
+                {
+                  icon: Shield,
+                  title: "Conformidade LGPD",
+                  desc: "Respeitamos a Lei Geral de Proteção de Dados. Você controla e pode excluir seus dados a qualquer momento.",
+                },
+                {
+                  icon: Eye,
+                  title: "Seus dados são seus",
+                  desc: "Nunca vendemos ou compartilhamos suas informações financeiras com terceiros. Zero rastreamento invasivo.",
+                },
+              ].map((item, i) => (
+                <div key={i} className="flex flex-col items-center text-center p-6 rounded-xl border border-border/50 bg-card">
+                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                    <item.icon className="w-5 h-5 text-primary" />
+                  </div>
+                  <h3 className="text-base font-semibold text-foreground mb-2 tracking-tight">{item.title}</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{item.desc}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>

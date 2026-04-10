@@ -1,4 +1,5 @@
 import { useLocation, useNavigate } from "react-router-dom";
+import { posthog } from "@/lib/posthog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ArrowLeft, TrendingDown, TrendingUp, AlertTriangle, Lightbulb } from "lucide-react";
@@ -191,7 +192,7 @@ const Results = () => {
             variant="outline" 
             size="lg" 
             className="bg-white text-primary hover:bg-white/90 border-white"
-            onClick={() => navigate("/signup")}
+            onClick={() => { posthog.capture("cta_click", { location: "results", action: "signup" }); navigate("/signup"); }}
           >
             Quero receber alertas
           </Button>
