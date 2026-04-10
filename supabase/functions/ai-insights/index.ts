@@ -130,30 +130,46 @@ async function getUserFinancialData(supabase: any, userId: string) {
   const now = new Date()
   const threeMonthsAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
 
-  // Optimize: Limit to 500 most recent transactions to prevent timeouts
-  const { data: transactions, error: txError } = await supabase
+  // Get ALL transactions for true balance calculation
+  const { data: allTransactions, error: allError } = await supabase
     .from('transactions')
-    .select('*')
+    .select('id, type, amount, date, description, category')
     .eq('user_id', userId)
-    .gte('date', threeMonthsAgo.toISOString())
     .order('date', { ascending: false })
-    .limit(500)
+    .limit(1000)
 
-  if (txError) throw txError
+  if (allError) throw allError
 
-  const income =
-    transactions?.filter((t: any) => t.type === 'income').reduce((sum: number, t: any) => sum + Number(t.amount), 0) ||
-    0
-  const expenses =
-    transactions?.filter((t: any) => t.type === 'expense').reduce((sum: number, t: any) => sum + Number(t.amount), 0) ||
-    0
-  const currentBalance = income - expenses
+  const all = (allTransactions || []).map((t: any) => ({ ...t, amount: Number(t.amount) }))
+
+  // All-time balance (consistent with dashboard)
+  const allTimeIncome = all.filter((t: any) => t.type === 'income').reduce((s: number, t: any) => s + t.amount, 0)
+  const allTimeExpenses = all.filter((t: any) => t.type === 'expense').reduce((s: number, t: any) => s + t.amount, 0)
+  const currentBalance = allTimeIncome - allTimeExpenses
+
+  // Recent 90-day window for trend analysis
+  const recentTransactions = all.filter((t: any) => {
+    if (!t.date) return false
+    return new Date(t.date) >= threeMonthsAgo
+  })
+
+  const income = recentTransactions.filter((t: any) => t.type === 'income').reduce((s: number, t: any) => s + t.amount, 0)
+  const expenses = recentTransactions.filter((t: any) => t.type === 'expense').reduce((s: number, t: any) => s + t.amount, 0)
+
+  // Calculate actual months with data (not assume 3)
+  const monthsWithData = new Set(
+    recentTransactions.map((t: any) => t.date?.substring(0, 7)).filter(Boolean)
+  )
+  const numMonths = Math.max(monthsWithData.size, 1)
 
   return {
-    transactions: transactions || [],
+    transactions: recentTransactions,
     currentBalance,
     income,
     expenses,
+    numMonths,
+    allTimeIncome,
+    allTimeExpenses,
     period: {
       start: threeMonthsAgo.toISOString(),
       end: now.toISOString(),
@@ -194,14 +210,36 @@ async function callOpenAI(apiKey: string, messages: any[], options: any = {}) {
   return JSON.parse(content)
 }
 
+// Helper: Clean transaction description (filter email parsing garbage)
+function cleanDescription(desc: string): string {
+  if (!desc) return 'Sem descrição'
+  // Remove common email spam patterns
+  const cleaned = desc.trim()
+  if (cleaned.length < 3) return 'Sem descrição'
+  return cleaned.substring(0, 40)
+}
+
+// Helper: Filter valid transactions (exclude obvious parsing garbage)
+function filterValidTransactions(transactions: any[]): any[] {
+  return transactions.filter((t: any) => {
+    // Exclude transactions with absurdly high amounts (likely parse errors)
+    if (t.amount > 500000) return false
+    // Exclude expense transactions categorized as 'Vendas' (classification error)
+    if (t.type === 'expense' && t.category === 'Vendas') return false
+    return true
+  })
+}
+
 // Helper: Preprocess financial data
 function preprocessFinancialData(data: any) {
-  const expenses = data.transactions.filter((t: any) => t.type === 'expense')
+  const validTransactions = filterValidTransactions(data.transactions)
+  const expenses = validTransactions.filter((t: any) => t.type === 'expense')
 
   // Top 5 categories
   const byCategory: Record<string, number> = {}
   expenses.forEach((t: any) => {
-    byCategory[t.category] = (byCategory[t.category] || 0) + t.amount
+    const cat = t.category || 'Outros'
+    byCategory[cat] = (byCategory[cat] || 0) + t.amount
   })
   const topCategories = Object.entries(byCategory)
     .sort((a, b) => b[1] - a[1])
@@ -209,52 +247,56 @@ function preprocessFinancialData(data: any) {
     .map(([cat, total]) => `${cat} R$ ${total.toFixed(0)}`)
     .join(', ')
 
-  // Recent high-value transactions
-  const recentHighValue = data.transactions
+  // Recent high-value transactions (with clean descriptions)
+  const recentHighValue = validTransactions
     .slice(0, 15)
     .filter((t: any) => t.amount > 100)
-    .map((t: any) => `${t.description.substring(0, 20)} R$ ${t.amount.toFixed(0)}`)
+    .map((t: any) => `${cleanDescription(t.description)} R$ ${t.amount.toFixed(0)} (${t.type === 'income' ? 'receita' : 'despesa'})`)
     .join(', ')
 
-  // Category breakdown
+  // Category breakdown with monthly average
+  const numMonths = data.numMonths || 1
   const categoryBreakdown = Object.entries(byCategory)
-    .sort((a, b) => b[1] - a[1])
+    .sort((a, b) => (b[1] as number) - (a[1] as number))
     .slice(0, 8)
-    .map(([cat, total]) => `${cat}: R$ ${total.toFixed(0)}`)
+    .map(([cat, total]) => `${cat}: R$ ${(total as number).toFixed(0)} total (R$ ${((total as number) / numMonths).toFixed(0)}/mês)`)
     .join(' | ')
 
-  // Top expenses
+  // Top expenses (with clean descriptions)
   const topExpenses = expenses
     .sort((a: any, b: any) => b.amount - a.amount)
     .slice(0, 10)
-    .map((t: any) => `${t.description.substring(0, 25)} R$ ${t.amount.toFixed(0)}`)
+    .map((t: any) => `${cleanDescription(t.description)} R$ ${t.amount.toFixed(0)}`)
     .join(', ')
 
-  return { topCategories, recentHighValue, categoryBreakdown, topExpenses }
+  return { topCategories, recentHighValue, categoryBreakdown, topExpenses, numMonths }
 }
 
 // Action: Generate Insights
 async function generateInsights(supabase: any, userId: string, openaiKey: string) {
   const financialData = await getUserFinancialData(supabase, userId)
   const summary = preprocessFinancialData(financialData)
+  const monthlyExpense = financialData.expenses / summary.numMonths
+  const monthlyIncome = financialData.income / summary.numMonths
 
-  const prompt = `Dados 90d: Saldo R$ ${financialData.currentBalance.toFixed(0)} | Receita R$ ${financialData.income.toFixed(0)} | Despesa R$ ${financialData.expenses.toFixed(0)} | ${financialData.transactions.length} transações
+  const prompt = `SALDO TOTAL: R$ ${financialData.currentBalance.toFixed(0)} (all-time: receita R$ ${financialData.allTimeIncome.toFixed(0)} - despesa R$ ${financialData.allTimeExpenses.toFixed(0)})
+Últimos ${summary.numMonths} meses: Receita R$ ${monthlyIncome.toFixed(0)}/mês | Despesa R$ ${monthlyExpense.toFixed(0)}/mês | ${financialData.transactions.length} transações
 
-Top categorias: ${summary.topCategories}
+Top categorias despesa: ${summary.topCategories}
 
 Gere 3-5 insights JSON:
 {
   "insights": [{
     "title": "< 60 chars",
-    "description": "Detalhes com números",
+    "description": "Detalhes com números reais do usuário",
     "category": "spending|income|balance|savings|risk|opportunity",
     "severity": "high|medium|low",
-    "action_items": ["ação específica"],
+    "action_items": ["ação específica e executável"],
     "confidence": 85
   }]
 }
 
-Foco: alertas urgentes, economia, padrões ruins, ações acionáveis.`
+IMPORTANTE: Use o SALDO TOTAL (all-time) como referência principal. ${financialData.currentBalance < 0 ? 'O saldo é NEGATIVO — priorize alertas de risco e ações de recuperação.' : ''} Foco: alertas urgentes, onde cortar, como aumentar receita. Ações executáveis hoje.`
 
   const result = await callOpenAI(
     openaiKey,
@@ -262,7 +304,7 @@ Foco: alertas urgentes, economia, padrões ruins, ações acionáveis.`
       {
         role: 'system',
         content:
-          'CFO virtual do Vault. 10k+ usuários, R$ 2M+ economizados. Insights diretos com números reais, ações executáveis hoje. Zero teoria.',
+          'CFO virtual do Vault para MEIs e pequenos negócios brasileiros. Insights diretos com números reais, ações executáveis hoje. Zero teoria, zero porcentagens absurdas.',
       },
       { role: 'user', content: prompt },
     ],
@@ -275,32 +317,34 @@ Foco: alertas urgentes, economia, padrões ruins, ações acionáveis.`
 // Action: Predict Balance
 async function predictBalance(supabase: any, userId: string, openaiKey: string, daysAhead: number) {
   const financialData = await getUserFinancialData(supabase, userId)
+  const summary = preprocessFinancialData(financialData)
+  const numMonths = summary.numMonths
+  const monthlyIncome = financialData.income / numMonths
+  const monthlyExpense = financialData.expenses / numMonths
+  const dailyNet = (monthlyIncome - monthlyExpense) / 30
 
-  const dailyAvg = {
-    income: (financialData.income / 90).toFixed(0),
-    expense: (financialData.expenses / 90).toFixed(0),
-    net: ((financialData.income - financialData.expenses) / 90).toFixed(0),
-  }
+  const prompt = `SALDO ATUAL (all-time): R$ ${financialData.currentBalance.toFixed(0)}
+Média mensal (${numMonths} meses): Receita R$ ${monthlyIncome.toFixed(0)} | Despesa R$ ${monthlyExpense.toFixed(0)} | Líquido R$ ${(monthlyIncome - monthlyExpense).toFixed(0)}/mês (R$ ${dailyNet.toFixed(0)}/dia)
 
-  const prompt = `Saldo: R$ ${financialData.currentBalance.toFixed(0)} | Média diária: +R$ ${dailyAvg.income} -R$ ${dailyAvg.expense} = ${dailyAvg.net}/dia
+Categorias: ${summary.categoryBreakdown}
 
-Preveja ${daysAhead}d JSON:
+Preveja saldo em ${daysAhead} dias. JSON:
 {
-  "predicted_balance": 15420.50,
-  "confidence": 0.85,
+  "predicted_balance": ${(financialData.currentBalance + dailyNet * daysAhead).toFixed(0)},
+  "confidence": 0.75,
   "days_ahead": ${daysAhead},
-  "trend": "texto curto",
-  "factors": ["3-5 fatores"]
+  "trend": "texto curto descrevendo tendência",
+  "factors": ["3-5 fatores que influenciam a previsão"]
 }
 
-Use tendência, médias, sazonalidade.`
+IMPORTANTE: A previsão DEVE partir do saldo atual R$ ${financialData.currentBalance.toFixed(0)} e aplicar a tendência mensal. Não invente despesas que não existem nos dados. Confiança menor se poucos dados.`
 
   const result = await callOpenAI(
     openaiKey,
     [
       {
         role: 'system',
-        content: 'Especialista modelagem financeira. Use tendências, sazonalidade, médias móveis. Previsões precisas e confiança honesta.',
+        content: 'Especialista modelagem financeira para MEIs brasileiros. Previsões conservadoras baseadas em dados reais. Nunca extrapole além do que os dados mostram.',
       },
       { role: 'user', content: prompt },
     ],
@@ -349,22 +393,31 @@ Buscar: valor >200% média, duplicatas, padrões estranhos. Vazio se ok.`
 async function analyzeSpendingPatterns(supabase: any, userId: string, openaiKey: string) {
   const financialData = await getUserFinancialData(supabase, userId)
   const summary = preprocessFinancialData(financialData)
+  const numMonths = summary.numMonths
+  const monthlyIncome = financialData.income / numMonths
+  const monthlyExpense = financialData.expenses / numMonths
 
-  const prompt = `Receita mensal: R$ ${(financialData.income / 3).toFixed(0)}
+  const prompt = `Período: ${numMonths} meses de dados
+Receita mensal média: R$ ${monthlyIncome.toFixed(0)} | Despesa mensal média: R$ ${monthlyExpense.toFixed(0)}
 
+Breakdown por categoria (total e média/mês):
 ${summary.categoryBreakdown}
 
 Analise JSON:
-{"patterns": [{"category": "nome", "average_amount": 1250, "trend": "increasing|decreasing|stable", "insights": "análise com % e recomendação"}]}
+{"patterns": [{"category": "nome", "average_amount": 1250, "trend": "increasing|decreasing|stable", "insights": "análise prática com valor absoluto e recomendação acionável"}]}
 
-3-5 categorias principais, números específicos.`
+REGRAS:
+- Use average_amount como a MÉDIA MENSAL (total / ${numMonths} meses)
+- Compare categorias entre si, NÃO use % absurdas (ex: "3000% da receita")
+- Se receita é baixa, foque em "quanto cada categoria custa por mês" e "o que pode ser cortado"
+- 3-5 categorias principais com números reais`
 
   const result = await callOpenAI(
     openaiKey,
     [
       {
         role: 'system',
-        content: 'Analista comportamento financeiro. Identifique padrões, tendências, oportunidades economia. Use números e %.',
+        content: 'Analista financeiro para MEIs brasileiros. Análise prática: valores absolutos, comparações úteis, recomendações de corte. Evite porcentagens distorcidas quando receita é muito baixa.',
       },
       { role: 'user', content: prompt },
     ],
@@ -439,11 +492,12 @@ async function chatWithFinancialContext(
   const financialData = await getUserFinancialData(supabase, userId)
   const summary = preprocessFinancialData(financialData)
 
+  const numMonths = summary.numMonths || 1
   const contextPrompt = `
 CONTEXTO FINANCEIRO DO USUÁRIO (Use para responder):
-- Saldo Atual: R$ ${financialData.currentBalance.toFixed(2)}
-- Receita (90d): R$ ${financialData.income.toFixed(2)}
-- Despesas (90d): R$ ${financialData.expenses.toFixed(2)}
+- Saldo Atual (all-time): R$ ${financialData.currentBalance.toFixed(2)}
+- Receita média mensal: R$ ${(financialData.income / numMonths).toFixed(2)}/mês (últimos ${numMonths} meses)
+- Despesa média mensal: R$ ${(financialData.expenses / numMonths).toFixed(2)}/mês
 - Top Categorias de Gastos: ${summary.topCategories}
 - Transações Recentes Altas: ${summary.recentHighValue}
 - Padrão de Gastos: ${summary.categoryBreakdown}
