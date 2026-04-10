@@ -14,10 +14,16 @@ const Logo = ({ className = "", size = "md" }: LogoProps) => {
     lg: "h-12 w-12"
   };
 
+  const textSizeClasses = {
+    sm: "text-lg",
+    md: "text-xl",
+    lg: "text-2xl"
+  };
+
   return (
     <div
       onClick={() => navigate("/")}
-      className={`cursor-pointer transition-transform hover:scale-105 ${className}`}
+      className={`cursor-pointer transition-transform hover:scale-105 flex items-center gap-2 ${className}`}
     >
       <svg
         viewBox="0 0 200 200"
@@ -55,6 +61,9 @@ const Logo = ({ className = "", size = "md" }: LogoProps) => {
           </linearGradient>
         </defs>
       </svg>
+      <span className={`${textSizeClasses[size]} font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent`}>
+        Vault
+      </span>
     </div>
   );
 };

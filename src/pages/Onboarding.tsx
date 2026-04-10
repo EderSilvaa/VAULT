@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { TrendingUp, Shield, Sparkles, AlertTriangle, Lightbulb, CheckCircle, ArrowRight, Smartphone, BarChart3, Zap, Brain, Target, Activity, Clock, TrendingDown } from "lucide-react";
+import { TrendingUp, Sparkles, CheckCircle, ArrowRight, Smartphone, BarChart3, Zap, Target, Activity, Clock, TrendingDown, Mail, FileText, ShieldOff } from "lucide-react";
 import Logo from "@/components/Logo";
 
 const Onboarding = () => {
@@ -50,8 +50,15 @@ const Onboarding = () => {
 
           <div className="flex items-center gap-3">
             <Button
+              variant="ghost"
+              onClick={() => navigate("/login")}
+              className="text-sm"
+            >
+              Entrar
+            </Button>
+            <Button
               variant="gradient"
-              onClick={() => navigate("/dashboard")}
+              onClick={() => navigate("/simulator")}
               className="shadow-glow"
             >
               Começar
@@ -85,7 +92,7 @@ const Onboarding = () => {
             <Button
               variant="gradient"
               size="lg"
-              onClick={() => navigate("/dashboard")}
+              onClick={() => navigate("/simulator")}
               className="shadow-glow text-lg"
             >
               Começar agora
@@ -105,6 +112,81 @@ const Onboarding = () => {
           <p className="text-sm text-muted-foreground">
             Sem cadastro inicial · Resultado em 2 minutos · 100% gratuito
           </p>
+        </div>
+      </section>
+
+      {/* Data Import — Anti Open Finance */}
+      <section className="py-16 relative z-10">
+        <div className="container mx-auto px-4">
+          <Card className="relative overflow-hidden max-w-5xl mx-auto border-2 border-primary/30 bg-gradient-to-br from-card to-card/80 shadow-2xl animate-fade-in-up">
+            <div className="absolute top-0 right-0 w-48 h-48 bg-primary/10 rounded-full blur-3xl" />
+            <div className="absolute bottom-0 left-0 w-64 h-64 bg-destructive/5 rounded-full blur-3xl" />
+
+            <CardContent className="relative p-8 md:p-12">
+              <div className="flex flex-col md:flex-row items-start gap-8">
+                {/* Left — Copy */}
+                <div className="flex-1 space-y-5">
+                  <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-destructive/10 text-destructive text-xs font-bold uppercase tracking-wider">
+                    <ShieldOff className="w-3.5 h-3.5" />
+                    Sem Open Finance
+                  </div>
+
+                  <h3 className="text-3xl md:text-4xl font-bold text-foreground leading-tight">
+                    Seus dados de compra,
+                    <br />
+                    <span className="bg-gradient-primary bg-clip-text text-transparent">
+                      sem depender de banco nenhum.
+                    </span>
+                  </h3>
+
+                  <p className="text-lg text-muted-foreground leading-relaxed">
+                    Open Finance é lento, burocrático e cheio de fricção.
+                    A Vault faz diferente: <strong className="text-foreground">puxa seus dados direto do Gmail e dos seus extratos bancários</strong> — NF-e, PIX, boletos, tudo que importa.
+                    Zero integração bancária. Zero espera. Zero burocracia.
+                  </p>
+
+                  <div className="grid grid-cols-2 gap-3 pt-2">
+                    <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/50">
+                      <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                        <Mail className="w-5 h-5 text-primary" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">Gmail Scanner</p>
+                        <p className="text-xs text-muted-foreground">IA lê seus e-mails financeiros automaticamente</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/50">
+                      <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                        <FileText className="w-5 h-5 text-primary" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">Extrato Bancário</p>
+                        <p className="text-xs text-muted-foreground">Importa OFX, CSV e Excel em segundos</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right — Visual checklist */}
+                <div className="w-full md:w-72 space-y-3 md:pt-12">
+                  <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-4">O que a Vault captura:</div>
+                  {[
+                    "NF-e e Notas Fiscais",
+                    "PIX enviado e recebido",
+                    "Boletos pagos",
+                    "Transferências bancárias",
+                    "Faturas de serviço",
+                    "Parcelas e recorrências"
+                  ].map((item, i) => (
+                    <div key={i} className="flex items-center gap-2.5 text-sm">
+                      <CheckCircle className="w-4 h-4 text-success shrink-0" />
+                      <span className="text-foreground">{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </section>
 
@@ -295,6 +377,56 @@ const Onboarding = () => {
         </div>
       </section>
 
+      {/* Social Proof - Feito para quem */}
+      <section className="py-24 bg-muted/30 relative z-10">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-20 animate-fade-in-up">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-semibold mb-6">
+              <Target className="w-4 h-4" />
+              FEITO PARA VOCÊ
+            </div>
+            <h2 className="text-4xl md:text-6xl font-bold text-foreground mb-6">
+              Quem usa a Vault?
+            </h2>
+            <p className="text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
+              Empreendedores que não podem se dar ao luxo de ficar sem caixa
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+            {[
+              {
+                persona: "MEI / Autônomo",
+                pain: "Receita irregular, meses bons e meses apertados. Precisa saber se o dinheiro vai dar até o fim do mês.",
+                icon: TrendingUp
+              },
+              {
+                persona: "Prestador de Serviço",
+                pain: "Clientes que atrasam pagamento e despesas fixas que não esperam. Precisa antecipar o gap de caixa.",
+                icon: TrendingDown
+              },
+              {
+                persona: "Pequeno Comércio",
+                pain: "Estoque, aluguel, funcionário — tudo vence junto. Precisa de visibilidade para planejar compras.",
+                icon: BarChart3
+              }
+            ].map((item, i) => (
+              <Card key={i} className="border-0 bg-gradient-to-br from-card/95 to-card/80 backdrop-blur-xl shadow-xl hover:shadow-2xl transition-all duration-500 hover:-translate-y-1 animate-fade-in" style={{ animationDelay: `${i * 0.1}s` }}>
+                <CardHeader className="pb-4">
+                  <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-3">
+                    <item.icon className="w-6 h-6 text-primary" />
+                  </div>
+                  <CardTitle className="text-xl font-bold text-foreground">{item.persona}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-muted-foreground leading-relaxed">{item.pain}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Benefits Section - REDESENHADA PREMIUM */}
       <section id="benefits" className="py-24 bg-muted/30 relative z-10">
         <div className="container mx-auto px-4">
@@ -315,26 +447,26 @@ const Onboarding = () => {
               {
                 title: "Zero Burocracia",
                 desc: "Sem planilhas complexas, cursos de finanças ou processos complicados. Tudo automatizado.",
-                color: "success"
+                hoverBg: "from-success/5"
               },
               {
                 title: "Dados Seguros",
                 desc: "Criptografia de ponta a ponta. Suas informações financeiras são privadas e protegidas.",
-                color: "primary"
+                hoverBg: "from-primary/5"
               },
               {
                 title: "IA Inteligente",
                 desc: "Machine Learning que aprende com seu histórico para previsões cada vez mais precisas.",
-                color: "secondary"
+                hoverBg: "from-secondary/5"
               },
               {
                 title: "Alertas Práticos",
                 desc: "Notificações instantâneas no WhatsApp quando você mais precisa, com ações sugeridas.",
-                color: "warning"
+                hoverBg: "from-warning/5"
               }
             ].map((benefit, i) => (
               <Card key={i} className="relative overflow-hidden border-0 bg-gradient-to-br from-card/95 to-card/80 backdrop-blur-xl shadow-xl hover:shadow-2xl transition-all duration-500 hover:-translate-y-1 group animate-fade-in" style={{ animationDelay: `${i * 0.1}s` }}>
-                <div className={`absolute inset-0 bg-gradient-to-br from-${benefit.color}/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
+                <div className={`absolute inset-0 bg-gradient-to-br ${benefit.hoverBg} to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
                 <CardHeader className="pb-4 relative">
                   <CardTitle className="text-xl font-bold text-foreground">{benefit.title}</CardTitle>
                 </CardHeader>
@@ -348,9 +480,9 @@ const Onboarding = () => {
           {/* Extra Stats Section */}
           <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto mt-20">
             {[
-              { value: "98%", label: "Taxa de precisão nas previsões" },
-              { value: "2min", label: "Tempo médio para primeira análise" },
-              { value: "24/7", label: "Monitoramento contínuo do seu caixa" }
+              { value: "4 sem", label: "Projeção de caixa antecipada" },
+              { value: "2min", label: "Tempo para sua primeira análise" },
+              { value: "100%", label: "Gratuito, sem cartão de crédito" }
             ].map((stat, i) => (
               <div key={i} className="text-center p-6 rounded-2xl bg-gradient-to-br from-primary/5 to-transparent border border-primary/20 hover:border-primary/40 transition-colors animate-fade-in" style={{ animationDelay: `${i * 0.1 + 0.4}s` }}>
                 <div className="text-4xl md:text-5xl font-bold bg-gradient-primary bg-clip-text text-transparent mb-2">
@@ -391,7 +523,7 @@ const Onboarding = () => {
                 <Button
                   size="lg"
                   className="bg-white text-primary hover:bg-white/90 shadow-2xl text-lg h-14 px-8"
-                  onClick={() => navigate("/dashboard")}
+                  onClick={() => navigate("/simulator")}
                 >
                   <Zap className="w-5 h-5 mr-2" />
                   Começar agora
@@ -430,29 +562,18 @@ const Onboarding = () => {
       {/* Footer - REDESENHADO PREMIUM */}
       <footer className="relative z-10 border-t border-border/40 bg-muted/20 backdrop-blur-sm">
         <div className="container mx-auto px-4 py-12">
-          <div className="grid md:grid-cols-4 gap-12 mb-12">
+          <div className="flex flex-col md:flex-row items-start justify-between gap-12 mb-12">
             {/* Brand Column */}
-            <div className="md:col-span-2 space-y-4">
+            <div className="space-y-4 max-w-md">
               <Logo size="md" />
-              <p className="text-muted-foreground leading-relaxed max-w-md">
-                A Vault é o copiloto financeiro alimentado por IA que prevê problemas de caixa antes que eles aconteçam. Feito para empreendedores que precisam de respostas rápidas.
+              <p className="text-muted-foreground leading-relaxed">
+                Copiloto financeiro com IA que prevê problemas de caixa antes que eles aconteçam. Feito para MEIs e pequenos negócios.
               </p>
-              <div className="flex gap-4 pt-2">
-                <Button variant="ghost" size="sm" className="hover:bg-primary/10">
-                  WhatsApp
-                </Button>
-                <Button variant="ghost" size="sm" className="hover:bg-primary/10">
-                  Instagram
-                </Button>
-                <Button variant="ghost" size="sm" className="hover:bg-primary/10">
-                  LinkedIn
-                </Button>
-              </div>
             </div>
 
-            {/* Links Column 1 */}
+            {/* Navigation */}
             <div className="space-y-4">
-              <h4 className="font-bold text-foreground text-sm uppercase tracking-wider">Produto</h4>
+              <h4 className="font-bold text-foreground text-sm uppercase tracking-wider">Navegação</h4>
               <div className="space-y-3">
                 <button onClick={() => scrollToSection('features')} className="block text-sm text-muted-foreground hover:text-foreground transition-colors">
                   Recursos
@@ -460,30 +581,11 @@ const Onboarding = () => {
                 <button onClick={() => scrollToSection('how-it-works')} className="block text-sm text-muted-foreground hover:text-foreground transition-colors">
                   Como Funciona
                 </button>
-                <button onClick={() => navigate("/dashboard")} className="block text-sm text-muted-foreground hover:text-foreground transition-colors">
-                  Dashboard Demo
+                <button onClick={() => navigate("/simulator")} className="block text-sm text-muted-foreground hover:text-foreground transition-colors">
+                  Simulador
                 </button>
-                <button className="block text-sm text-muted-foreground hover:text-foreground transition-colors">
-                  Preços
-                </button>
-              </div>
-            </div>
-
-            {/* Links Column 2 */}
-            <div className="space-y-4">
-              <h4 className="font-bold text-foreground text-sm uppercase tracking-wider">Empresa</h4>
-              <div className="space-y-3">
-                <button className="block text-sm text-muted-foreground hover:text-foreground transition-colors">
-                  Sobre Nós
-                </button>
-                <button className="block text-sm text-muted-foreground hover:text-foreground transition-colors">
-                  Blog
-                </button>
-                <button className="block text-sm text-muted-foreground hover:text-foreground transition-colors">
-                  Contato
-                </button>
-                <button className="block text-sm text-muted-foreground hover:text-foreground transition-colors">
-                  Suporte
+                <button onClick={() => navigate("/login")} className="block text-sm text-muted-foreground hover:text-foreground transition-colors">
+                  Entrar
                 </button>
               </div>
             </div>
@@ -492,13 +594,8 @@ const Onboarding = () => {
           {/* Bottom Bar */}
           <div className="pt-8 border-t border-border/40 flex flex-col md:flex-row items-center justify-between gap-4">
             <p className="text-sm text-muted-foreground">
-              © 2025 Vault Finanças. Todos os direitos reservados.
+              © 2026 Vault Finanças. Todos os direitos reservados.
             </p>
-            <div className="flex gap-6 text-sm text-muted-foreground">
-              <button className="hover:text-foreground transition-colors">Privacidade</button>
-              <button className="hover:text-foreground transition-colors">Termos de Uso</button>
-              <button className="hover:text-foreground transition-colors">Política de Cookies</button>
-            </div>
           </div>
         </div>
       </footer>
