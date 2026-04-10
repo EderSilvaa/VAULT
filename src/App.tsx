@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { LoadingFallback } from "@/components/LoadingFallback";
+import { usePageView } from "@/hooks/usePageView";
 
 // Lazy load all pages for better performance
 const Onboarding = lazy(() => import("./pages/Onboarding"));
@@ -20,6 +21,12 @@ const Profile = lazy(() => import("./pages/Profile"));
 const TaxDashboard = lazy(() => import("./pages/TaxDashboard"));
 const Import = lazy(() => import("./pages/Import"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+
+/** Tracks pageviews — must be inside BrowserRouter */
+const PageViewTracker = ({ children }: { children: React.ReactNode }) => {
+  usePageView();
+  return <>{children}</>;
+};
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -41,6 +48,7 @@ const App = () => (
           v7_relativeSplatPath: true,
         }}
       >
+        <PageViewTracker>
         <Suspense fallback={<LoadingFallback />}>
           <Routes>
             <Route path="/" element={<Onboarding />} />
@@ -87,6 +95,7 @@ const App = () => (
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
+        </PageViewTracker>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

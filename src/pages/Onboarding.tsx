@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { posthog } from "@/lib/posthog";
 import { Button } from "@/components/ui/button";
 import {
   ArrowRight,
@@ -130,6 +131,10 @@ const Onboarding = () => {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
   };
 
+  const track = (event: string, props?: Record<string, unknown>) => {
+    posthog.capture(event, props);
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* ── Subtle background gradient (static, no animation) ── */}
@@ -162,10 +167,10 @@ const Onboarding = () => {
           </nav>
 
           <div className="flex items-center gap-2 sm:gap-3">
-            <Button variant="ghost" size="sm" onClick={() => navigate("/login")} className="text-sm">
+            <Button variant="ghost" size="sm" onClick={() => { track("cta_click", { location: "header", action: "login" }); navigate("/login"); }} className="text-sm">
               Entrar
             </Button>
-            <Button size="sm" onClick={() => navigate("/simulator")} className="bg-primary text-primary-foreground hover:bg-primary/90">
+            <Button size="sm" onClick={() => { track("cta_click", { location: "header", action: "simulator" }); navigate("/simulator"); }} className="bg-primary text-primary-foreground hover:bg-primary/90">
               Começar grátis
             </Button>
           </div>
@@ -199,7 +204,7 @@ const Onboarding = () => {
               <div className="flex flex-col sm:flex-row gap-3 pt-2">
                 <Button
                   size="lg"
-                  onClick={() => navigate("/simulator")}
+                  onClick={() => { track("cta_click", { location: "hero", action: "simulator" }); navigate("/simulator"); }}
                   className="bg-primary text-primary-foreground hover:bg-primary/90 h-12 px-6 text-base"
                 >
                   Começar agora
@@ -208,7 +213,7 @@ const Onboarding = () => {
                 <Button
                   variant="outline"
                   size="lg"
-                  onClick={() => scrollToSection("how-it-works")}
+                  onClick={() => { track("cta_click", { location: "hero", action: "how_it_works" }); scrollToSection("how-it-works"); }}
                   className="h-12 px-6 text-base"
                 >
                   Como funciona
@@ -515,7 +520,7 @@ const Onboarding = () => {
               <Button
                 size="lg"
                 className="bg-white text-primary hover:bg-white/90 h-12 px-8 text-base font-semibold"
-                onClick={() => navigate("/simulator")}
+                onClick={() => { track("cta_click", { location: "cta_final", action: "simulator" }); navigate("/simulator"); }}
               >
                 Começar agora
                 <ArrowRight className="w-4 h-4 ml-2" />

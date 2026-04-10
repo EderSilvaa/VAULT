@@ -8,6 +8,7 @@ import { useToast } from './use-toast'
 
 // Import authService directly from the service file
 import { authService } from '@/services/auth.service'
+import { posthog } from '@/lib/posthog'
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null)
@@ -30,8 +31,14 @@ export function useAuth() {
         if (event === 'SIGNED_IN' && session?.user) {
           const currentUser = await authService.getCurrentUser()
           setUser(currentUser)
+          posthog.identify(session.user.id, {
+            email: session.user.email,
+            name: currentUser?.name,
+          })
+          posthog.capture('user_signed_in', { method: 'session_restore' })
         } else if (event === 'SIGNED_OUT') {
           setUser(null)
+          posthog.reset()
         }
       }
     )
@@ -45,6 +52,7 @@ export function useAuth() {
     try {
       setLoading(true)
       await authService.signup(data)
+      posthog.capture('user_signup', { method: 'email' })
 
       toast({
         title: 'Conta criada com sucesso!',
@@ -69,6 +77,7 @@ export function useAuth() {
       setLoading(true)
       console.log('useAuth: Starting login process')
       await authService.login(data)
+      posthog.capture('user_login', { method: 'email' })
 
       toast({
         title: 'Login realizado!',
@@ -92,6 +101,7 @@ export function useAuth() {
   const loginWithGoogle = async () => {
     try {
       setLoading(true)
+      posthog.capture('user_login_attempt', { method: 'google' })
       await authService.loginWithGoogle()
       // Redirect happens automatically via OAuth
     } catch (error: any) {
