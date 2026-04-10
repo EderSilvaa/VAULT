@@ -311,9 +311,10 @@ const Dashboard = () => {
                 const monthlyBurn = stats.monthlySavings // negative = burning
                 const isPositive = monthlyBurn >= 0
                 const burnPerMonth = Math.abs(monthlyBurn)
-                const isCritical = !isPositive && daysUntilZero > 0 && daysUntilZero < 15
-                const isWarning = !isPositive && daysUntilZero >= 15 && daysUntilZero < 60
-                const isHealthy = isPositive || daysUntilZero >= 60
+                const alreadyNegative = currentBalance <= 0 && !isPositive
+                const isCritical = alreadyNegative || (!isPositive && daysUntilZero > 0 && daysUntilZero < 15)
+                const isWarning = !isCritical && !isPositive && daysUntilZero >= 15 && daysUntilZero < 60
+                const isHealthy = !isCritical && !isWarning && (isPositive || daysUntilZero >= 60)
 
                 const statusColor = isCritical
                   ? 'border-red-500/40 bg-red-500/5'
@@ -325,8 +326,12 @@ const Dashboard = () => {
                 const labelColor = isCritical ? 'text-red-500' : isWarning ? 'text-orange-400' : 'text-green-500'
                 const daysColor = isCritical ? 'text-red-500' : isWarning ? 'text-orange-400' : 'text-green-500'
 
-                const statusLabel = isCritical ? 'Risco Crítico' : isWarning ? 'Atenção Necessária' : 'Caixa Saudável'
-                const statusMsg = isCritical
+                const statusLabel = isCritical
+                  ? (alreadyNegative ? 'Saldo Negativo' : 'Risco Crítico')
+                  : isWarning ? 'Atenção Necessária' : 'Caixa Saudável'
+                const statusMsg = alreadyNegative
+                  ? `Seu saldo já está negativo. ${burnPerMonth > 0 ? `Despesas de R$ ${burnPerMonth.toLocaleString('pt-BR')}/mês agravam a situação.` : 'Registre receitas para equilibrar.'}`
+                  : isCritical
                   ? `Seu caixa zera em ${daysUntilZero} dias. Ação imediata necessária.`
                   : isWarning
                   ? `No ritmo atual, você tem ${daysUntilZero} dias de caixa. Revise suas despesas.`
@@ -334,8 +339,8 @@ const Dashboard = () => {
                   ? `Receita supera despesas em R$ ${burnPerMonth.toLocaleString('pt-BR')}/mês. Bom trabalho!`
                   : `Caixa estável por mais de 60 dias no ritmo atual.`
 
-                // progress bar: 0-100% de 0 a 90 dias
-                const progressPct = isPositive ? 100 : Math.min(100, Math.round((daysUntilZero / 90) * 100))
+                // progress bar: 0% when negative, 0-100% de 0 a 90 dias
+                const progressPct = alreadyNegative ? 0 : isPositive ? 100 : Math.min(100, Math.round((daysUntilZero / 90) * 100))
 
                 return (
                   <Card className={`border-2 ${statusColor}`}>
@@ -358,9 +363,11 @@ const Dashboard = () => {
                       <div className="mt-4 flex items-end gap-3">
                         <div>
                           <p className={`text-5xl font-black tabular-nums leading-none ${daysColor}`}>
-                            {isPositive ? '∞' : daysUntilZero}
+                            {isPositive ? '∞' : alreadyNegative ? '!' : daysUntilZero}
                           </p>
-                          <p className="text-xs text-muted-foreground mt-1">dias de caixa restantes</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {alreadyNegative ? 'saldo negativo' : 'dias de caixa restantes'}
+                          </p>
                         </div>
                         <div className="flex-1 pb-1">
                           <p className="text-xs text-muted-foreground mb-1.5">{statusMsg}</p>

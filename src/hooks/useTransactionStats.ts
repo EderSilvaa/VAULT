@@ -298,7 +298,6 @@ export function useTransactionStats() {
     monthlyRevenue: number,
     monthlyExpenses: number
   ) => {
-    // console.log('[Fallback] Using simple projection')
     const dailyNet = (monthlyRevenue - monthlyExpenses) / 30
     const projection: CashFlowProjection[] = []
     let balance = currentBalance
@@ -306,7 +305,6 @@ export function useTransactionStats() {
     for (let day = 0; day <= 120; day++) {
       projection.push({ day, balance: Math.round(balance) })
       balance += dailyNet
-      balance = balance * (1 + (Math.random() - 0.5) * 0.06)
     }
 
     return projection
@@ -319,7 +317,7 @@ export function useTransactionStats() {
     allTransactions: Transaction[]
   ) => {
     try {
-      // Filter for last 6 months only (for ML projection)
+      // Filter for last 6 months only
       const sixMonthsAgo = new Date()
       sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)
 
@@ -329,68 +327,67 @@ export function useTransactionStats() {
         return date >= sixMonthsAgo
       })
 
-      // If no historical data, use simple projection
+      // If insufficient historical data, use simple projection
       if (transactions.length < 10) {
-        // console.log('[Projection] Insufficient data, using simple projection')
         return generateSimpleProjection(currentBalance, monthlyRevenue, monthlyExpenses)
       }
 
-      // 1. LINEAR REGRESSION - Calculate trend from historical data
-      const dailyBalances = calculateDailyBalances(transactions)
-      const trend = calculateLinearRegression(dailyBalances)
+      // Calculate average monthly revenue and expenses from historical data
+      const now = new Date()
+      const monthsWithData = new Map<string, { revenue: number; expenses: number }>()
 
-      // 2. EXPONENTIAL MOVING AVERAGE - Give more weight to recent data
-      const ema = calculateEMA(dailyBalances, 14) // 14-day EMA
+      transactions.forEach(t => {
+        if (!t.date) return
+        const d = new Date(t.date)
+        const key = `${d.getFullYear()}-${d.getMonth()}`
+        const entry = monthsWithData.get(key) || { revenue: 0, expenses: 0 }
+        if (t.type === 'income') entry.revenue += t.amount
+        else entry.expenses += t.amount
+        monthsWithData.set(key, entry)
+      })
 
-      // 3. PATTERN DETECTION - Identify recurring transactions
-      const recurringPatterns = detectRecurringTransactions(transactions)
+      const monthEntries = Array.from(monthsWithData.values())
+      const numMonths = Math.max(monthEntries.length, 1)
 
-      // 4. SEASONALITY ANALYSIS - Detect monthly spending patterns
-      const seasonalityFactors = analyzeSeasonality(transactions)
+      // Use historical averages, but weight current month more if it has data
+      const avgRevenue = monthEntries.reduce((s, m) => s + m.revenue, 0) / numMonths
+      const avgExpenses = monthEntries.reduce((s, m) => s + m.expenses, 0) / numMonths
 
-      // 5. MACHINE LEARNING PROJECTION - Combine all factors
+      // Blend: 60% historical average + 40% current month (more recent = more relevant)
+      const blendedRevenue = monthlyRevenue > 0
+        ? avgRevenue * 0.6 + monthlyRevenue * 0.4
+        : avgRevenue
+      const blendedExpenses = monthlyExpenses > 0
+        ? avgExpenses * 0.6 + monthlyExpenses * 0.4
+        : avgExpenses
+
+      const dailyNet = (blendedRevenue - blendedExpenses) / 30
+
+      // Detect trend direction from recent months (improving or worsening?)
+      let trendAdjustment = 0
+      if (monthEntries.length >= 2) {
+        const recentSavings = monthEntries.slice(-2).map(m => m.revenue - m.expenses)
+        const olderSavings = monthEntries.slice(0, -2).map(m => m.revenue - m.expenses)
+        const recentAvg = recentSavings.reduce((a, b) => a + b, 0) / recentSavings.length
+        const olderAvg = olderSavings.length > 0
+          ? olderSavings.reduce((a, b) => a + b, 0) / olderSavings.length
+          : recentAvg
+        // Subtle trend: if recent months are better/worse, adjust daily by small amount
+        trendAdjustment = ((recentAvg - olderAvg) / 30) * 0.1 // 10% weight on trend
+      }
+
+      // Generate deterministic projection
       const projection: CashFlowProjection[] = []
-      const projectionDays = 120
       let balance = currentBalance
 
-      for (let day = 0; day <= projectionDays; day++) {
-        // Base projection using EMA
-        const baseChange = ema.trend
-
-        // Apply linear regression trend
-        const trendAdjustment = trend.slope
-
-        // Apply recurring patterns (salaries, bills, etc.)
-        const recurringAdjustment = getRecurringAdjustment(day, recurringPatterns)
-
-        // Apply seasonality (monthly patterns)
-        const currentMonth = new Date().getMonth()
-        const projectedMonth = (currentMonth + Math.floor(day / 30)) % 12
-        const seasonalFactor = seasonalityFactors[projectedMonth] || 1
-
-        // Combine all factors with weighted importance
-        const dailyChange = (
-          baseChange * 0.3 +           // 30% EMA
-          trendAdjustment * 0.25 +     // 25% Linear trend
-          recurringAdjustment * 0.35   // 35% Recurring patterns (most reliable)
-        ) * seasonalFactor              // Apply seasonal adjustment
-
-        // Add realistic variance (±3% instead of 5% for more stability)
-        const variance = (Math.random() - 0.5) * 0.06
-        const adjustedChange = dailyChange * (1 + variance)
-
-        balance += adjustedChange
-
-        projection.push({
-          day,
-          balance: Math.round(balance),
-        })
+      for (let day = 0; day <= 120; day++) {
+        projection.push({ day, balance: Math.round(balance) })
+        balance += dailyNet + trendAdjustment
       }
 
       return projection
     } catch (error: any) {
-      console.error('Error generating advanced projection:', error)
-      // Fallback to simple projection
+      console.error('Error generating projection:', error)
       return generateSimpleProjection(currentBalance, monthlyRevenue, monthlyExpenses)
     }
   }
