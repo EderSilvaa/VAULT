@@ -33,6 +33,11 @@ const Import = () => {
   const [gmailConnected, setGmailConnected] = useState(false)
   const [isScanningGmail, setIsScanningGmail] = useState(false)
   const [gmailScanned, setGmailScanned] = useState(0)
+  const [gmailDays, setGmailDays] = useState(90)
+  const [scanStage, setScanStage] = useState('')
+  const [lastScan, setLastScan] = useState<{ scannedAt: string; emailsScanned: number; transactionsFound: number } | null>(null)
+  const [scanInfo, setScanInfo] = useState<{ isIncremental: boolean; effectiveDays: number } | null>(null)
+  const [previewFilter, setPreviewFilter] = useState<'all' | 'review'>('all')
   const { toast } = useToast()
   const navigate = useNavigate()
   const { user } = useAuth()
@@ -50,29 +55,48 @@ const Import = () => {
 
   const handleGmailScan = async () => {
     setIsScanningGmail(true)
+    setScanStage('Conectando ao Gmail...')
+
+    // Progress stages to give visual feedback while Edge Function runs
+    const stages = [
+      { delay: 2000, text: 'Buscando e-mails financeiros...' },
+      { delay: 6000, text: 'Analisando conteúdo dos e-mails...' },
+      { delay: 12000, text: 'Extraindo valores e categorias...' },
+      { delay: 20000, text: 'Quase lá, finalizando análise...' },
+    ]
+    const timers = stages.map(({ delay, text }) =>
+      setTimeout(() => setScanStage(text), delay)
+    )
+
     try {
-      const { transactions, scanned } = await gmailService.parseEmails(user?.id ?? '', 90)
+      const { transactions, scanned, isIncremental, effectiveDays } = await gmailService.parseEmails(user?.id ?? '', gmailDays)
+      timers.forEach(clearTimeout)
       setGmailScanned(scanned)
+      setScanInfo({ isIncremental, effectiveDays })
 
       if (transactions.length === 0) {
         toast({
           title: 'Nenhuma transação encontrada',
-          description: `Verificamos ${scanned} e-mails nos últimos 90 dias sem encontrar valores financeiros reconhecíveis.`,
+          description: `Verificamos ${scanned} e-mails nos últimos ${effectiveDays} dias sem encontrar valores financeiros reconhecíveis.`,
         })
         setIsScanningGmail(false)
         return
       }
 
       setParsedTransactions(transactions)
-      setSelectedIds(new Set(transactions.map((_, i) => i)))
+      // Auto-deselect low-confidence transactions — they go to the review queue
+      setSelectedIds(new Set(transactions.map((_, i) => i).filter(i => transactions[i].confidence !== 'low')))
+      setPreviewFilter('all')
       setStep('preview')
     } catch (err: any) {
+      timers.forEach(clearTimeout)
       if (err.message?.includes('expirado') || err.message?.includes('Token')) {
         setGmailConnected(false)
       }
       toast({ title: 'Erro ao escanear Gmail', description: err.message, variant: 'destructive' })
     } finally {
       setIsScanningGmail(false)
+      setScanStage('')
     }
   }
 
@@ -80,11 +104,16 @@ const Import = () => {
   useEffect(() => {
     gmailService.isConnected().then(connected => {
       setGmailConnected(connected)
-      if (connected && searchParams.get('tab') === 'gmail') {
+      const oauthPending = localStorage.getItem('gmail_oauth_pending')
+      if (connected && (oauthPending || searchParams.get('tab') === 'gmail')) {
+        localStorage.removeItem('gmail_oauth_pending')
         if (user?.id) gmailService.saveRefreshToken(user.id)
         handleGmailScan()
       }
     })
+    if (user?.id) {
+      gmailService.getLastScan(user.id).then(setLastScan)
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -226,15 +255,17 @@ const Import = () => {
         description: t.description,
         category: t.category || 'Outros',
         date: t.date,
-        payment_method: 'bank_transfer' as const,
-        is_recurring: false,
+        source_id: t.source_id,
       }))
 
-      await createTransactions(toCreate)
+      const created = await createTransactions(toCreate)
+      const skipped = toCreate.length - created.length
 
       toast({
         title: 'Importação concluída!',
-        description: `${toCreate.length} transações importadas com sucesso.`,
+        description: skipped > 0
+          ? `${created.length} transações importadas, ${skipped} duplicatas ignoradas.`
+          : `${created.length} transações importadas com sucesso.`,
       })
 
       setFiles([])
@@ -302,7 +333,7 @@ const Import = () => {
                 </CardTitle>
                 <CardDescription>
                   O Vault busca automaticamente NF-e, PIX, boletos e confirmações de pagamento
-                  nos seus últimos 90 dias de e-mails.
+                  nos seus e-mails. Escolha o período desejado.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -328,15 +359,29 @@ const Import = () => {
                       <Check className="w-4 h-4" />
                       Gmail conectado
                     </div>
-                    {gmailScanned > 0 && (
+                    {(lastScan || gmailScanned > 0) && (
                       <p className="text-xs text-muted-foreground">
-                        Último scan: {gmailScanned} e-mails verificados
+                        {lastScan
+                          ? `Último scan: ${format(new Date(lastScan.scannedAt), "dd/MM 'às' HH:mm", { locale: ptBR })} — ${lastScan.emailsScanned} e-mails, ${lastScan.transactionsFound} transações`
+                          : `${gmailScanned} e-mails verificados`}
                       </p>
                     )}
-                    <div className="flex gap-3">
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={gmailDays}
+                        onChange={(e) => setGmailDays(Number(e.target.value))}
+                        disabled={isScanningGmail}
+                        className="text-sm bg-transparent border rounded px-2 py-2 focus:outline-none focus:ring-1 focus:ring-primary"
+                      >
+                        <option value={30}>30 dias</option>
+                        <option value={60}>60 dias</option>
+                        <option value={90}>90 dias</option>
+                        <option value={180}>180 dias</option>
+                        <option value={365}>1 ano</option>
+                      </select>
                       <Button onClick={handleGmailScan} disabled={isScanningGmail} className="gap-2">
                         {isScanningGmail ? (
-                          <><Loader2 className="w-4 h-4 animate-spin" />Escaneando...</>
+                          <><Loader2 className="w-4 h-4 animate-spin" />{scanStage || 'Escaneando...'}</>
                         ) : (
                           <><RefreshCw className="w-4 h-4" />Escanear e-mails</>
                         )}
@@ -476,7 +521,14 @@ const Import = () => {
           <div>
             <h1 className="text-xl md:text-2xl font-bold">Revisar Transações</h1>
             <p className="text-sm text-muted-foreground">
-              {parsedTransactions.length} transações encontradas - revise categorias e selecione quais importar
+              {parsedTransactions.length} transações encontradas
+              {scanInfo && (
+                <span className="ml-1 text-xs">
+                  — {scanInfo.isIncremental
+                    ? `scan incremental (${scanInfo.effectiveDays} dia${scanInfo.effectiveDays !== 1 ? 's' : ''})`
+                    : `scan completo (${scanInfo.effectiveDays} dias)`}
+                </span>
+              )}
             </p>
           </div>
         </div>
@@ -511,6 +563,43 @@ const Import = () => {
         </Card>
       </div>
 
+      {/* Legend + filter tabs */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        {parsedTransactions.some(t => t.confidence && t.confidence !== 'high') && (
+          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-yellow-400" /> Confiança média</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400" /> Confiança baixa</span>
+            <span className="flex items-center gap-1"><span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 font-medium text-[10px]">2/12</span> Parcela</span>
+          <span className="flex items-center gap-1"><span className="px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 font-medium text-[10px]">recorrente</span> Recorrência detectada</span>
+          </div>
+        )}
+        {parsedTransactions.some(t => t.confidence === 'low') && (
+          <div className="flex gap-1">
+            <button
+              onClick={() => setPreviewFilter('all')}
+              className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                previewFilter === 'all'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+              }`}
+            >
+              Todas ({parsedTransactions.length})
+            </button>
+            <button
+              onClick={() => setPreviewFilter('review')}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                previewFilter === 'review'
+                  ? 'bg-red-500 text-white'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-red-400" />
+              Revisão ({parsedTransactions.filter(t => t.confidence === 'low').length})
+            </button>
+          </div>
+        )}
+      </div>
+
       {/* Transaction Table */}
       <Card>
         <CardContent className="p-0">
@@ -531,7 +620,10 @@ const Import = () => {
 
           {/* Rows */}
           <div className="max-h-[60vh] overflow-y-auto divide-y">
-            {parsedTransactions.map((t, i) => {
+            {parsedTransactions
+              .map((t, i) => ({ t, i }))
+              .filter(({ t }) => previewFilter === 'review' ? t.confidence === 'low' : true)
+              .map(({ t, i }) => {
               const isSelected = selectedIds.has(i)
               return (
                 <div
@@ -557,15 +649,37 @@ const Import = () => {
                     })()}
                   </span>
 
-                  <span className="flex-1 min-w-0 truncate" title={t.description}>
-                    {t.description}
-                  </span>
+                  <div className="flex-1 min-w-0 flex items-center gap-1.5">
+                    <span className="truncate" title={t.description}>
+                      {t.description}
+                    </span>
+                    {t.installment && (
+                      <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 font-medium">
+                        {t.installment.current}/{t.installment.total}
+                      </span>
+                    )}
+                    {t.isRecurring && (
+                      <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 font-medium" title="Recorrência detectada — mesmo valor em 3+ meses">
+                        recorrente
+                      </span>
+                    )}
+                  </div>
 
-                  <span className={`w-24 text-right font-medium tabular-nums shrink-0 ${
-                    t.type === 'income' ? 'text-green-600' : 'text-red-500'
-                  }`}>
-                    {t.type === 'income' ? '+' : '-'}{formatCurrency(t.amount)}
-                  </span>
+                  <div className="w-24 text-right shrink-0 flex items-center justify-end gap-1">
+                    {t.confidence && t.confidence !== 'high' && (
+                      <span
+                        className={`shrink-0 w-2 h-2 rounded-full ${
+                          t.confidence === 'medium' ? 'bg-yellow-400' : 'bg-red-400'
+                        }`}
+                        title={t.confidence === 'medium' ? 'Confiança média — revise o valor' : 'Confiança baixa — revise o valor'}
+                      />
+                    )}
+                    <span className={`font-medium tabular-nums ${
+                      t.type === 'income' ? 'text-green-600' : 'text-red-500'
+                    }`}>
+                      {t.type === 'income' ? '+' : '-'}{formatCurrency(t.amount)}
+                    </span>
+                  </div>
 
                   <div className="w-16 flex justify-center shrink-0">
                     <button

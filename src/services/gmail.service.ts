@@ -7,18 +7,24 @@ export const gmailService = {
    * Redirects back to /import?tab=gmail after consent.
    */
   async connectGmail() {
+    // Flag checked on /import after OAuth returns — avoids relying on query params
+    // being preserved through the Supabase redirect (they sometimes aren't).
+    localStorage.setItem('gmail_oauth_pending', '1')
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         scopes: 'https://www.googleapis.com/auth/gmail.readonly',
-        redirectTo: `${window.location.origin}/import?tab=gmail`,
+        redirectTo: `${window.location.origin}/import`,
         queryParams: {
           access_type: 'offline',
           prompt: 'consent',
         },
       },
     })
-    if (error) throw error
+    if (error) {
+      localStorage.removeItem('gmail_oauth_pending')
+      throw error
+    }
     return data
   },
 
@@ -72,12 +78,13 @@ export const gmailService = {
   /**
    * Calls the parse-gmail Edge Function.
    * Automatically uses refresh_token if access_token is missing/expired.
+   * Uses incremental scan (days since last scan) when available.
    * Returns ImportedTransaction[] ready for the review table.
    */
   async parseEmails(
     userId: string,
     days = 90
-  ): Promise<{ transactions: ImportedTransaction[]; scanned: number }> {
+  ): Promise<{ transactions: ImportedTransaction[]; scanned: number; isIncremental: boolean; effectiveDays: number }> {
     let { accessToken, refreshToken } = await gmailService.getTokens()
 
     // Fallback: load persisted refresh token from DB
@@ -89,11 +96,26 @@ export const gmailService = {
       throw new Error('Gmail não conectado. Clique em "Conectar Gmail" primeiro.')
     }
 
+    // Incremental scan: only fetch new emails since last scan
+    let effectiveDays = days
+    let isIncremental = false
+    if (userId) {
+      const lastScanInfo = await gmailService.getLastScan(userId)
+      if (lastScanInfo) {
+        const msSince = Date.now() - new Date(lastScanInfo.scannedAt).getTime()
+        const daysSince = Math.ceil(msSince / (1000 * 60 * 60 * 24))
+        if (daysSince < days) {
+          effectiveDays = Math.max(daysSince + 1, 1)
+          isIncremental = true
+        }
+      }
+    }
+
     const { data, error } = await supabase.functions.invoke('parse-gmail', {
       body: {
         provider_token: accessToken,
         provider_refresh_token: refreshToken,
-        days,
+        days: effectiveDays,
       },
     })
 
@@ -112,9 +134,66 @@ export const gmailService = {
       description: t.description,
       type: t.type,
       category: t.category,
+      source_id: t.source_id,
+      confidence: t.confidence,
+      installment: t.installment,
+      isRecurring: t.isRecurring,
       raw: { source: t.source },
     }))
 
-    return { transactions, scanned: data.scanned ?? 0 }
+    // Log the scan
+    await gmailService.logScan(userId, {
+      days,
+      emailsScanned: data.scanned ?? 0,
+      transactionsFound: transactions.length,
+    })
+
+    return { transactions, scanned: data.scanned ?? 0, isIncremental, effectiveDays }
+  },
+
+  /**
+   * Saves a scan log entry.
+   */
+  async logScan(userId: string, info: {
+    days: number
+    emailsScanned: number
+    transactionsFound: number
+    transactionsImported?: number
+    durationMs?: number
+  }) {
+    await supabase
+      .from('gmail_scan_logs' as any)
+      .insert({
+        user_id: userId,
+        days_range: info.days,
+        emails_scanned: info.emailsScanned,
+        transactions_found: info.transactionsFound,
+        transactions_imported: info.transactionsImported ?? 0,
+        duration_ms: info.durationMs ?? null,
+      })
+  },
+
+  /**
+   * Gets the last scan log for the user.
+   */
+  async getLastScan(userId: string): Promise<{
+    scannedAt: string
+    emailsScanned: number
+    transactionsFound: number
+  } | null> {
+    const { data } = await supabase
+      .from('gmail_scan_logs' as any)
+      .select('scanned_at, emails_scanned, transactions_found')
+      .eq('user_id', userId)
+      .order('scanned_at', { ascending: false })
+      .limit(1)
+      .single()
+
+    if (!data) return null
+    return {
+      scannedAt: (data as any).scanned_at,
+      emailsScanned: (data as any).emails_scanned,
+      transactionsFound: (data as any).transactions_found,
+    }
   },
 }
