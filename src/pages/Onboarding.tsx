@@ -344,7 +344,7 @@ const Onboarding = () => {
               {
                 icon: Bell,
                 title: "Alertas Inteligentes",
-                desc: "Avisos no WhatsApp antes do caixa zerar. Sistema multicamada que aprende com seu comportamento.",
+                desc: "Alertas automáticos antes do caixa zerar. Sistema que aprende com seu comportamento e te avisa na hora certa.",
                 accent: "text-warning bg-warning/10",
               },
               {
@@ -405,7 +405,7 @@ const Onboarding = () => {
                 step: "3",
                 icon: Smartphone,
                 title: "Receba alertas",
-                desc: "A Vault avisa no WhatsApp antes do aperto e sugere exatamente o que fazer.",
+                desc: "A Vault te avisa antes do aperto e sugere exatamente o que fazer.",
               },
             ].map((item, i) => (
               <div key={i} className="flex flex-col items-center text-center">
@@ -482,7 +482,7 @@ const Onboarding = () => {
               { icon: Zap, title: "Zero Burocracia", desc: "Sem planilhas complexas ou processos complicados. Tudo automatizado." },
               { icon: ShieldOff, title: "Dados Seguros", desc: "Criptografia de ponta a ponta. Suas informações são privadas e protegidas." },
               { icon: Brain, title: "IA Inteligente", desc: "Machine Learning que aprende com seu histórico para previsões mais precisas." },
-              { icon: Bell, title: "Alertas Práticos", desc: "Notificações no WhatsApp quando você mais precisa, com ações sugeridas." },
+              { icon: Bell, title: "Alertas Práticos", desc: "Notificações automáticas quando você mais precisa, com ações sugeridas." },
             ].map((b, i) => (
               <div key={i} className="rounded-xl border border-border/50 bg-card p-6 hover:border-border transition-colors">
                 <b.icon className="w-5 h-5 text-primary mb-4" />
