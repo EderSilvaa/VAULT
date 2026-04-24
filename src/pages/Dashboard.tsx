@@ -271,8 +271,8 @@ const Dashboard = () => {
             </div>
           </SheetHeader>
 
-          <div className="flex flex-col justify-between h-[calc(100%-5rem)]">
-            <nav className="space-y-1 p-3">
+          <div className="flex flex-col h-[calc(100%-5rem)] min-h-0">
+            <nav className="space-y-1 p-3 flex-1 overflow-y-auto min-h-0">
               <p className="px-3 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Principal</p>
               <MenuItem icon={Activity} label="Dashboard" active={activeSection === 'dashboard'} onClick={() => goToSection('dashboard')} />
               <MenuItem icon={Upload} label="Importar Extrato" onClick={() => { navigate('/import'); setSidebarOpen(false); }} />
@@ -292,7 +292,7 @@ const Dashboard = () => {
               <MenuItem icon={Settings} label="Configurações" onClick={() => { setSidebarOpen(false); }} />
             </nav>
 
-            <div className="border-t p-3">
+            <div className="border-t p-3 shrink-0">
               <MenuItem icon={LogOut} label="Sair" onClick={() => { handleLogout(); setSidebarOpen(false); }} />
             </div>
           </div>
