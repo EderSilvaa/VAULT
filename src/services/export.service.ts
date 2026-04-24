@@ -596,7 +596,7 @@ class ExportService {
       pdf.setFontSize(8);
       pdf.setTextColor(150, 150, 150);
       pdf.text(
-        `Página ${i} de ${totalPages} | Vault - Caixa Alerta | vault.com.br`,
+        `Página ${i} de ${totalPages} | Vault - Caixa Alerta | vault.tec.br`,
         pageWidth / 2,
         pageHeight - 10,
         { align: 'center' }
