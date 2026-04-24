@@ -1,14 +1,18 @@
 // Login Page
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import Logo from '@/components/Logo'
 
 const Login = () => {
-  const { loginWithGoogle, loading } = useAuth()
+  const { loginWithGoogle, loading, isAuthenticated } = useAuth()
   const [error, setError] = useState('')
+
+  if (isAuthenticated) {
+    return <Navigate to="/dashboard" replace />
+  }
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4 relative overflow-hidden">

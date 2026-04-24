@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -7,8 +7,12 @@ import { ArrowLeft, Check } from "lucide-react";
 import Logo from "@/components/Logo";
 
 const Signup = () => {
-  const { loginWithGoogle, loading } = useAuth();
+  const { loginWithGoogle, loading, isAuthenticated } = useAuth();
   const [error, setError] = useState("");
+
+  if (isAuthenticated) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   const handleSignup = async () => {
     try {
