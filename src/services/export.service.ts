@@ -2,6 +2,7 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import * as XLSX from 'xlsx';
 
 export interface ExportData {
   // KPIs
@@ -21,6 +22,7 @@ export interface ExportData {
     amount: number;
     description: string;
     type: 'income' | 'expense';
+    category: string;
     date: string;
   }>;
 
@@ -730,6 +732,70 @@ class ExportService {
         message: 'Erro ao enviar relatório. Tente novamente.',
       };
     }
+  }
+
+  /**
+   * Gera planilha XLSX para enviar ao contador
+   * Aba 1: Todas as transações
+   * Aba 2: Resumo por categoria
+   */
+  generateXLSX(data: ExportData): void {
+    const wb = XLSX.utils.book_new();
+    const fmt = (d: string) => format(new Date(d), 'dd/MM/yyyy', { locale: ptBR });
+    const brl = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    // ── Aba 1: Transações ──
+    const rows = data.transactions
+      .slice()
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .map(t => ({
+        Data: fmt(t.date),
+        Descrição: t.description,
+        Categoria: t.category || 'Outros',
+        Tipo: t.type === 'income' ? 'Receita' : 'Despesa',
+        'Valor (R$)': t.type === 'income' ? t.amount : -t.amount,
+      }));
+
+    const wsTransactions = XLSX.utils.json_to_sheet(rows);
+    wsTransactions['!cols'] = [
+      { wch: 12 }, { wch: 45 }, { wch: 18 }, { wch: 10 }, { wch: 14 },
+    ];
+    XLSX.utils.book_append_sheet(wb, wsTransactions, 'Transações');
+
+    // ── Aba 2: Resumo por categoria ──
+    const catMap = new Map<string, { receitas: number; despesas: number }>();
+    data.transactions.forEach(t => {
+      const cat = t.category || 'Outros';
+      const cur = catMap.get(cat) ?? { receitas: 0, despesas: 0 };
+      if (t.type === 'income') cur.receitas += t.amount;
+      else cur.despesas += t.amount;
+      catMap.set(cat, cur);
+    });
+
+    const summaryRows = Array.from(catMap.entries())
+      .sort((a, b) => (b[1].receitas + b[1].despesas) - (a[1].receitas + a[1].despesas))
+      .map(([cat, v]) => ({
+        Categoria: cat,
+        'Receitas (R$)': brl(v.receitas),
+        'Despesas (R$)': brl(v.despesas),
+        'Saldo (R$)': brl(v.receitas - v.despesas),
+      }));
+
+    // Totais
+    summaryRows.push({
+      Categoria: 'TOTAL',
+      'Receitas (R$)': brl(data.totalRevenue),
+      'Despesas (R$)': brl(data.totalExpenses),
+      'Saldo (R$)': brl(data.totalRevenue - data.totalExpenses),
+    });
+
+    const wsSummary = XLSX.utils.json_to_sheet(summaryRows);
+    wsSummary['!cols'] = [{ wch: 18 }, { wch: 16 }, { wch: 16 }, { wch: 14 }];
+    XLSX.utils.book_append_sheet(wb, wsSummary, 'Resumo por Categoria');
+
+    // ── Download ──
+    const periodLabel = format(new Date(data.periodStart), 'yyyy-MM', { locale: ptBR });
+    XLSX.writeFile(wb, `vault-contador-${periodLabel}.xlsx`);
   }
 
   /**

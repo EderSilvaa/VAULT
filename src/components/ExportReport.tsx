@@ -18,7 +18,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Download, Mail, FileText, Loader2 } from 'lucide-react';
+import { Download, Mail, FileText, Loader2, FileSpreadsheet } from 'lucide-react';
 import { exportService, type ExportData, type ExportOptions } from '@/services/export.service';
 import { useToast } from '@/hooks/use-toast';
 import { format, subDays, subMonths } from 'date-fns';
@@ -31,7 +31,7 @@ interface ExportReportProps {
 export const ExportReport = ({ data, trigger }: ExportReportProps) => {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
-  const [exportType, setExportType] = useState<'pdf' | 'email'>('pdf');
+  const [exportType, setExportType] = useState<'pdf' | 'xlsx' | 'email'>('pdf');
   const [period, setPeriod] = useState<'week' | 'month' | 'quarter'>('month');
   const [email, setEmail] = useState(data.userEmail || '');
   const [isExporting, setIsExporting] = useState(false);
@@ -63,6 +63,12 @@ export const ExportReport = ({ data, trigger }: ExportReportProps) => {
         toast({
           title: 'PDF gerado com sucesso!',
           description: 'O relatório foi baixado para seu computador.',
+        });
+      } else if (exportType === 'xlsx') {
+        exportService.generateXLSX(adjustedData);
+        toast({
+          title: 'Planilha gerada!',
+          description: 'O arquivo .xlsx foi baixado. Pronto para enviar ao contador.',
         });
       } else {
         // Email
@@ -144,24 +150,37 @@ export const ExportReport = ({ data, trigger }: ExportReportProps) => {
             {/* Tipo de Export */}
             <div className="space-y-2">
               <Label>Formato de Exportação</Label>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-2">
                 <Button
                   variant={exportType === 'pdf' ? 'default' : 'outline'}
-                  className="gap-2"
+                  className="gap-1.5 text-sm"
                   onClick={() => setExportType('pdf')}
                 >
-                  <Download className="h-4 w-4" />
-                  Baixar PDF
+                  <FileText className="h-4 w-4" />
+                  PDF
+                </Button>
+                <Button
+                  variant={exportType === 'xlsx' ? 'default' : 'outline'}
+                  className="gap-1.5 text-sm"
+                  onClick={() => setExportType('xlsx')}
+                >
+                  <FileSpreadsheet className="h-4 w-4" />
+                  Planilha
                 </Button>
                 <Button
                   variant={exportType === 'email' ? 'default' : 'outline'}
-                  className="gap-2"
+                  className="gap-1.5 text-sm"
                   onClick={() => setExportType('email')}
                 >
                   <Mail className="h-4 w-4" />
-                  Enviar Email
+                  E-mail
                 </Button>
               </div>
+              {exportType === 'xlsx' && (
+                <p className="text-xs text-muted-foreground">
+                  Gera um .xlsx com todas as transações categorizadas + resumo por categoria. Ideal para enviar ao contador.
+                </p>
+              )}
             </div>
 
             {/* Email (se email selecionado) */}

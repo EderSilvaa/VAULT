@@ -191,7 +191,7 @@ const Dashboard = () => {
   };
 
   const prepareExportData = (): ExportData => {
-    const formattedTransactions = transactions.map(t => ({ id: t.id, amount: t.amount, description: t.description, type: t.type as 'income' | 'expense', date: t.date }));
+    const formattedTransactions = transactions.map(t => ({ id: t.id, amount: t.amount, description: t.description, type: t.type as 'income' | 'expense', category: t.category || 'Outros', date: t.date }));
     const formattedGoals = goals.map(g => ({ title: g.title, progress: g.progress_percentage || 0, target: g.target_amount, current: g.current_amount }));
     const formattedInsights = insights.length > 0 ? {
       summary: (insights[0] as any)?.summary || insights[0]?.description || 'Análise financeira realizada.',
