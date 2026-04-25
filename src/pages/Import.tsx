@@ -18,25 +18,62 @@ import { gmailAccountsService, type GmailAccount, type ScanAccountResult } from 
 type Step = 'upload' | 'preview'
 type Tab = 'files' | 'gmail'
 
+const SCAN_SESSION_KEY = 'vault_scan_session'
+
+interface ScanSession {
+  parsedTransactions: ImportedTransaction[]
+  selectedIds: number[]
+  scanResults: ScanAccountResult[] | null
+}
+
+function loadScanSession(): ScanSession | null {
+  try {
+    const raw = sessionStorage.getItem(SCAN_SESSION_KEY)
+    if (!raw) return null
+    return JSON.parse(raw) as ScanSession
+  } catch {
+    return null
+  }
+}
+
+function saveScanSession(session: ScanSession) {
+  try {
+    sessionStorage.setItem(SCAN_SESSION_KEY, JSON.stringify(session))
+  } catch { /* quota exceeded — fail silently */ }
+}
+
+function clearScanSession() {
+  try { sessionStorage.removeItem(SCAN_SESSION_KEY) } catch { /* noop */ }
+}
+
 const Import = () => {
   const [searchParams] = useSearchParams()
   const [tab, setTab] = useState<Tab>(() =>
     searchParams.get('tab') === 'gmail' ? 'gmail' : 'files'
   )
-  const [step, setStep] = useState<Step>('upload')
+
+  // Restore last scan from sessionStorage on first render
+  const _session = loadScanSession()
+  const [step, setStep] = useState<Step>(_session?.parsedTransactions?.length ? 'preview' : 'upload')
   const [isDragging, setIsDragging] = useState(false)
   const [files, setFiles] = useState<File[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
   const [isParsing, setIsParsing] = useState(false)
-  const [parsedTransactions, setParsedTransactions] = useState<ImportedTransaction[]>([])
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [parsedTransactions, setParsedTransactions] = useState<ImportedTransaction[]>(
+    _session?.parsedTransactions ?? []
+  )
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(
+    new Set(_session?.selectedIds ?? [])
+  )
   const [accounts, setAccounts] = useState<GmailAccount[]>([])
   const [accountsLoading, setAccountsLoading] = useState(true)
   const [isAddingAccount, setIsAddingAccount] = useState(false)
   const [isScanningGmail, setIsScanningGmail] = useState(false)
   const [gmailDays, setGmailDays] = useState(90)
   const [scanStage, setScanStage] = useState('')
-  const [scanResults, setScanResults] = useState<ScanAccountResult[] | null>(null)
+  const [scanResults, setScanResults] = useState<ScanAccountResult[] | null>(
+    _session?.scanResults ?? null
+  )
   const [previewFilter, setPreviewFilter] = useState<'all' | 'review'>('all')
   const [accountFilter, setAccountFilter] = useState<string>('all')
   const { toast } = useToast()
@@ -91,6 +128,7 @@ const Import = () => {
     setIsScanningGmail(true)
     setScanStage('Conectando ao Gmail...')
     setScanResults(null)
+    clearScanSession()
 
     const baseStages = [
       { delay: 2000, text: 'Buscando e-mails financeiros...' },
@@ -130,6 +168,17 @@ const Import = () => {
       setScanStage('')
     }
   }
+
+  // Persist scan results to sessionStorage whenever they change
+  useEffect(() => {
+    if (parsedTransactions.length > 0) {
+      saveScanSession({
+        parsedTransactions,
+        selectedIds: Array.from(selectedIds),
+        scanResults,
+      })
+    }
+  }, [parsedTransactions, selectedIds, scanResults])
 
   useEffect(() => {
     if (user?.id) refreshAccounts()
@@ -327,6 +376,7 @@ const Import = () => {
 
       setFiles([])
       setParsedTransactions([])
+      clearScanSession()
       navigate('/dashboard')
     } catch (error: any) {
       toast({
@@ -344,6 +394,8 @@ const Import = () => {
 
   // ──────────── UPLOAD STEP ────────────
   if (step === 'upload') {
+    const hasSavedScan = loadScanSession()?.parsedTransactions?.length
+
     return (
       <div className="container mx-auto p-4 md:p-6 space-y-6 animate-fade-in max-w-3xl">
         <div className="flex flex-col gap-1">
@@ -352,6 +404,26 @@ const Import = () => {
             Importe extratos bancários ou escaneie seus e-mails financeiros.
           </p>
         </div>
+
+        {/* Restore last scan banner */}
+        {hasSavedScan && (
+          <div className="flex items-center justify-between gap-3 p-3 rounded-lg border bg-muted/40">
+            <div className="flex items-center gap-2 text-sm min-w-0">
+              <Mail className="w-4 h-4 text-primary shrink-0" />
+              <span className="text-muted-foreground truncate">
+                Você tem um scan anterior com <span className="font-medium text-foreground">{hasSavedScan} transações</span> não importadas.
+              </span>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="shrink-0"
+              onClick={() => setStep('preview')}
+            >
+              Ver scan
+            </Button>
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="flex border-b">
@@ -628,7 +700,7 @@ const Import = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => { setStep('upload'); setParsedTransactions([]) }}>
+          <Button variant="ghost" size="icon" onClick={() => setStep('upload')}>
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div>
