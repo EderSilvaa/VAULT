@@ -259,199 +259,37 @@ function detectCategory(text: string): string {
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// Bank-specific parsers — template-based extraction, always confidence:high
-// Falls back to generic parser if pattern doesn't match
+// User pattern context — built from past imported transactions
 // ──────────────────────────────────────────────────────────────────────
-interface BankParseResult {
-  amount: number
-  type: 'income' | 'expense'
+interface UserPattern {
   description: string
   category: string
+  type: 'income' | 'expense'
+  freq: number
 }
 
-// Quick R$ extractor: labeled value > first R$ match
+function buildUserContext(patterns: UserPattern[], avgIncome: number, avgExpense: number): string {
+  if (!patterns.length) return ''
+
+  const lines = patterns
+    .slice(0, 20)
+    .map(p => `  - "${p.description}" → ${p.type === 'income' ? 'receita' : 'despesa'}, ${p.category} (${p.freq}x)`)
+    .join('\n')
+
+  const incomeStr = avgIncome > 0 ? `Receita média: R$${avgIncome.toFixed(0)}` : ''
+  const expenseStr = avgExpense > 0 ? `Despesa média: R$${avgExpense.toFixed(0)}` : ''
+  const stats = [incomeStr, expenseStr].filter(Boolean).join(' | ')
+
+  return `\nPadrões anteriores deste usuário (use para categorizar melhor):\n${lines}${stats ? '\n  ' + stats : ''}`
+}
+
+// Bank-specific template parsers removed — AI handles all banks contextually.
+// Kept: extractAmountSimple for fallback regex path.
 function extractAmountSimple(text: string): number {
   const labeled = /(?:valor|total)[:\s]+R\$\s*([\d]{1,3}(?:\.\d{3})*,\d{2})/i.exec(text)
   if (labeled) return parseFloat(labeled[1].replace(/\./g, '').replace(',', '.'))
   const m = /R\$\s*([\d]{1,3}(?:\.\d{3})*,\d{2})/i.exec(text)
   return m ? parseFloat(m[1].replace(/\./g, '').replace(',', '.')) : 0
-}
-
-function parseNubank(sub: string, body: string): BankParseResult | null {
-  const text = sub + ' ' + body
-  if (/recebeu.*pix|pix.*recebid/i.test(text)) {
-    const amount = extractAmountSimple(body)
-    if (!amount) return null
-    const name = /(?:de|pagador)[:\s]+([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+){0,3})/i.exec(body)
-    return { amount, type: 'income', description: name ? `PIX de ${name[1].trim()}` : 'PIX recebido Nubank', category: 'Receita' }
-  }
-  if (/fez.*pix|pix.*enviado|enviou.*pix/i.test(text)) {
-    const amount = extractAmountSimple(body)
-    if (!amount) return null
-    const name = /(?:para|destinat[áa]rio)[:\s]+([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+){0,3})/i.exec(body)
-    return { amount, type: 'expense', description: name ? `PIX para ${name[1].trim()}` : 'PIX enviado Nubank', category: 'Outros' }
-  }
-  if (/compra\s+aprovada/i.test(text)) {
-    const amount = extractAmountSimple(body)
-    if (!amount) return null
-    const merchant = /(?:em|no|na)\s+([A-ZÀ-Ú][A-ZÀ-Ú0-9\s\*]{2,30}?)(?:\s+(?:por|R\$)|\n)/i.exec(body)
-    const desc = merchant ? merchant[1].trim() : 'Compra Nubank'
-    return { amount, type: 'expense', description: desc, category: detectCategory(desc) }
-  }
-  if (/fatura.*fech|fechamento.*fatura/i.test(text)) {
-    const amount = extractAmountSimple(body)
-    if (!amount) return null
-    return { amount, type: 'expense', description: 'Fatura Nubank', category: 'Fixo' }
-  }
-  return null
-}
-
-function parseInter(sub: string, body: string): BankParseResult | null {
-  const text = sub + ' ' + body
-  if (/pix\s+recebid|transfer[êe]ncia.*recebida/i.test(text)) {
-    const labeled = /valor[:\s]+R\$\s*([\d.]+,\d{2})/i.exec(body)
-    const amount = labeled ? parseFloat(labeled[1].replace(/\./g, '').replace(',', '.')) : extractAmountSimple(body)
-    if (!amount) return null
-    const name = /(?:de|pagador|remetente)[:\s]+([A-ZÀ-Ú][^\n]{2,40}?)(?:\n|CPF|CNPJ|$)/i.exec(body)
-    return { amount, type: 'income', description: name ? `PIX de ${name[1].trim()}` : 'PIX recebido Inter', category: 'Receita' }
-  }
-  if (/pix\s+(?:realizado|enviado)|transfer[êe]ncia.*(?:realizada|enviada)/i.test(text)) {
-    const labeled = /valor[:\s]+R\$\s*([\d.]+,\d{2})/i.exec(body)
-    const amount = labeled ? parseFloat(labeled[1].replace(/\./g, '').replace(',', '.')) : extractAmountSimple(body)
-    if (!amount) return null
-    const name = /(?:para|favorecido|destinat[áa]rio)[:\s]+([A-ZÀ-Ú][^\n]{2,40}?)(?:\n|CPF|CNPJ|$)/i.exec(body)
-    return { amount, type: 'expense', description: name ? `PIX para ${name[1].trim()}` : 'PIX enviado Inter', category: 'Outros' }
-  }
-  return null
-}
-
-function parseItau(sub: string, body: string): BankParseResult | null {
-  const text = sub + ' ' + body
-  if (/pix\s+recebid/i.test(text)) {
-    const amount = extractAmountSimple(body)
-    if (!amount) return null
-    const name = /(?:de|remetente)[:\s]+([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+){0,3})/i.exec(body)
-    return { amount, type: 'income', description: name ? `PIX de ${name[1].trim()}` : 'PIX recebido Itaú', category: 'Receita' }
-  }
-  if (/transfer[êe]ncia.*(?:pix|ted|doc).*(?:realizada|enviada|efetuada)/i.test(text)) {
-    const amount = extractAmountSimple(body)
-    if (!amount) return null
-    return { amount, type: 'expense', description: 'Transferência Itaú', category: 'Outros' }
-  }
-  if (/boleto.*pago|pagamento.*boleto/i.test(text)) {
-    const amount = extractAmountSimple(body)
-    if (!amount) return null
-    return { amount, type: 'expense', description: 'Boleto pago Itaú', category: 'Fixo' }
-  }
-  return null
-}
-
-function parsePicPay(sub: string, body: string): BankParseResult | null {
-  const text = sub + ' ' + body
-  if (/voc[eê]\s+recebeu|pagamento\s+recebido/i.test(text)) {
-    const amount = extractAmountSimple(body)
-    if (!amount) return null
-    const name = /(?:de|pagador)[:\s]+([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+){0,3})/i.exec(body)
-    return { amount, type: 'income', description: name ? `PIX de ${name[1].trim()}` : 'Recebimento PicPay', category: 'Receita' }
-  }
-  if (/voc[eê]\s+(?:pagou|enviou)|pagamento\s+(?:realizado|enviado)/i.test(text)) {
-    const amount = extractAmountSimple(body)
-    if (!amount) return null
-    const name = /(?:para|destinat[áa]rio)[:\s]+([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+){0,3})/i.exec(body)
-    return { amount, type: 'expense', description: name ? `PIX para ${name[1].trim()}` : 'Pagamento PicPay', category: 'Outros' }
-  }
-  return null
-}
-
-function parseBradesco(sub: string, body: string): BankParseResult | null {
-  const text = sub + ' ' + body
-  if (/pix\s+recebido|voc[eê]\s+recebeu.*pix|transfer[êe]ncia.*recebida/i.test(text)) {
-    const amount = extractAmountSimple(body)
-    if (!amount) return null
-    const name = /(?:de|remetente|pagador)[:\s]+([A-ZÀ-Ú][^\n]{2,40}?)(?:\n|CPF|CNPJ|$)/i.exec(body)
-    return { amount, type: 'income', description: name ? `PIX de ${name[1].trim()}` : 'PIX recebido Bradesco', category: 'Receita' }
-  }
-  if (/pix\s+(?:realizado|enviado)|transfer[êe]ncia.*(?:realizada|enviada)/i.test(text)) {
-    const amount = extractAmountSimple(body)
-    if (!amount) return null
-    const name = /(?:para|favorecido|destinat[áa]rio)[:\s]+([A-ZÀ-Ú][^\n]{2,40}?)(?:\n|CPF|CNPJ|$)/i.exec(body)
-    return { amount, type: 'expense', description: name ? `PIX para ${name[1].trim()}` : 'PIX enviado Bradesco', category: 'Outros' }
-  }
-  if (/boleto.*pago|pagamento.*efetuado|d[ée]bito.*conta/i.test(text)) {
-    const amount = extractAmountSimple(body)
-    if (!amount) return null
-    return { amount, type: 'expense', description: 'Pagamento Bradesco', category: 'Fixo' }
-  }
-  return null
-}
-
-function parseSantander(sub: string, body: string): BankParseResult | null {
-  const text = sub + ' ' + body
-  if (/pix\s+recebido|recebeu.*pix/i.test(text)) {
-    const amount = extractAmountSimple(body)
-    if (!amount) return null
-    const name = /(?:de|remetente)[:\s]+([A-ZÀ-Ú][^\n]{2,40}?)(?:\n|CPF|CNPJ|$)/i.exec(body)
-    return { amount, type: 'income', description: name ? `PIX de ${name[1].trim()}` : 'PIX recebido Santander', category: 'Receita' }
-  }
-  if (/pix\s+(?:enviado|realizado)|transfer[êe]ncia.*realizada/i.test(text)) {
-    const amount = extractAmountSimple(body)
-    if (!amount) return null
-    const name = /(?:para|destinat[áa]rio)[:\s]+([A-ZÀ-Ú][^\n]{2,40}?)(?:\n|CPF|CNPJ|$)/i.exec(body)
-    return { amount, type: 'expense', description: name ? `PIX para ${name[1].trim()}` : 'PIX enviado Santander', category: 'Outros' }
-  }
-  if (/fatura.*cart[ãa]o|pagamento.*fatura/i.test(text)) {
-    const amount = extractAmountSimple(body)
-    if (!amount) return null
-    return { amount, type: 'expense', description: 'Fatura Santander', category: 'Fixo' }
-  }
-  return null
-}
-
-function parseC6Bank(sub: string, body: string): BankParseResult | null {
-  const text = sub + ' ' + body
-  if (/pix\s+recebido|voc[eê]\s+recebeu/i.test(text)) {
-    const amount = extractAmountSimple(body)
-    if (!amount) return null
-    const name = /(?:de|remetente)[:\s]+([A-ZÀ-Ú][^\n]{2,40}?)(?:\n|CPF|CNPJ|$)/i.exec(body)
-    return { amount, type: 'income', description: name ? `PIX de ${name[1].trim()}` : 'PIX recebido C6 Bank', category: 'Receita' }
-  }
-  if (/pix\s+enviado|voc[eê]\s+(?:enviou|fez\s+um\s+pix)/i.test(text)) {
-    const amount = extractAmountSimple(body)
-    if (!amount) return null
-    const name = /(?:para|destinat[áa]rio)[:\s]+([A-ZÀ-Ú][^\n]{2,40}?)(?:\n|CPF|CNPJ|$)/i.exec(body)
-    return { amount, type: 'expense', description: name ? `PIX para ${name[1].trim()}` : 'PIX enviado C6 Bank', category: 'Outros' }
-  }
-  return null
-}
-
-function parseMercadoPago(sub: string, body: string): BankParseResult | null {
-  const text = sub + ' ' + body
-  if (/voc[eê]\s+recebeu|pagamento\s+recebido|dinheiro\s+recebido/i.test(text)) {
-    const amount = extractAmountSimple(body)
-    if (!amount) return null
-    const name = /(?:de|pagador|remetente)[:\s]+([A-ZÀ-Ú][^\n]{2,40}?)(?:\n|CPF|CNPJ|$)/i.exec(body)
-    return { amount, type: 'income', description: name ? `Recebimento de ${name[1].trim()}` : 'Recebimento Mercado Pago', category: 'Receita' }
-  }
-  if (/voc[eê]\s+(?:pagou|fez\s+um\s+pagamento)|pagamento\s+(?:aprovado|realizado)/i.test(text)) {
-    const amount = extractAmountSimple(body)
-    if (!amount) return null
-    const name = /(?:para|destinat[áa]rio|loja)[:\s]+([A-ZÀ-Ú][^\n]{2,40}?)(?:\n|CPF|CNPJ|$)/i.exec(body)
-    return { amount, type: 'expense', description: name ? `Pagamento ${name[1].trim()}` : 'Pagamento Mercado Pago', category: 'Outros' }
-  }
-  return null
-}
-
-const BANK_SPECIFIC_PARSERS: Record<string, (sub: string, body: string) => BankParseResult | null> = {
-  'nubank.com.br': parseNubank,
-  'inter.co': parseInter,
-  'bancointer.com.br': parseInter,
-  'itau.com.br': parseItau,
-  'itau-unibanco.com.br': parseItau,
-  'picpay.com': parsePicPay,
-  'bradesco.com.br': parseBradesco,
-  'santander.com.br': parseSantander,
-  'c6bank.com.br': parseC6Bank,
-  'mercadopago.com': parseMercadoPago,
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -807,7 +645,7 @@ function parseNFeXML(xml: string): { amount: number; emitter: string; date: stri
 // Parse single message → transaction(s)
 // Returns array: usually 1 item, but credit card statements can be many
 // ──────────────────────────────────────────────────────────────────────
-async function parseMessage(msg: any, accessToken: string, accountKey?: string): Promise<ParsedTransaction[]> {
+async function parseMessage(msg: any, accessToken: string, accountKey?: string, userContext?: string): Promise<ParsedTransaction[]> {
   const idPrefix = accountKey ? `gmail:${accountKey}:` : 'gmail:'
   const headers: Array<{ name: string; value: string }> = msg.payload?.headers || []
   const subject = headers.find(h => h.name === 'Subject')?.value || ''
@@ -884,32 +722,12 @@ async function parseMessage(msg: any, accessToken: string, accountKey?: string):
   }
   if (!date) date = new Date().toISOString()
 
-  // Try bank-specific parser first (always returns confidence:high)
-  const senderDomain = from.match(/@([\w.-]+)/)?.[1]?.toLowerCase() ?? ''
-  const bankParser = BANK_SPECIFIC_PARSERS[senderDomain]
-  if (bankParser) {
-    const bankResult = bankParser(subject, body)
-    if (bankResult && bankResult.amount > 0) {
-      return [{
-        type: bankResult.type,
-        amount: bankResult.amount,
-        description: bankResult.description,
-        category: bankResult.category,
-        date,
-        source: `Gmail: ${senderName || from}`,
-        source_id: `${idPrefix}${msg.id}`,
-        confidence: 'high' as const,
-        installment: detectInstallment(combined),
-      }]
-    }
-  }
-
   // Try to parse as credit card statement with individual items
   const statementItems = parseCreditCardStatement(body, msg.id, date, senderName, accountKey)
   if (statementItems) return statementItems
 
-  // AI fallback — GPT-4o-mini understands context, filters spam, detects income
-  const aiResult = await parseWithAI(subject, body, senderName)
+  // AI parser — handles all banks, filters spam, uses user context for personalization
+  const aiResult = await parseWithAI(subject, body, senderName, userContext)
   if (aiResult !== null) {
     if (!aiResult.isTransaction) return []
     const installment = detectInstallment(combined)
@@ -964,12 +782,12 @@ interface AIParseResult {
 async function parseWithAI(
   subject: string,
   body: string,
-  senderName: string
+  senderName: string,
+  userContext?: string
 ): Promise<AIParseResult | null> {
   const apiKey = Deno.env.get('OPENAI_API_KEY')
   if (!apiKey) return null
 
-  // Truncate body to keep costs low (~$0.001 per email)
   const truncatedBody = body.slice(0, 3000)
 
   const prompt = `Você é um extrator de transações financeiras para um app de contabilidade de pequenas empresas brasileiras (MEI).
@@ -979,6 +797,7 @@ Analise o e-mail e determine se representa uma transação financeira CONFIRMADA
 Remetente: ${senderName}
 Assunto: ${subject}
 Corpo: ${truncatedBody}
+${userContext ?? ''}
 
 Retorne APENAS JSON no formato:
 {
@@ -996,7 +815,8 @@ Regras:
 - amount: número BRL sem símbolo (ex: 150.00)
 - type=income: dinheiro ENTRANDO na conta (recebimentos, vendas, pix recebido)
 - type=expense: dinheiro SAINDO (pagamentos, boletos, assinaturas, pix enviado)
-- confidence=high: valor e tipo certos; medium: valor provável; low: ambíguo`
+- confidence=high: valor e tipo certos; medium: valor provável; low: ambíguo
+- Use os padrões anteriores do usuário para melhorar categorização e descrição quando disponíveis`
 
   try {
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -1040,7 +860,8 @@ Regras:
 async function scanInbox(
   accessToken: string,
   days: number,
-  accountKey?: string
+  accountKey?: string,
+  userContext?: string
 ): Promise<{ transactions: ParsedTransaction[]; scanned: number }> {
   const afterEpoch = Math.floor(Date.now() / 1000) - days * 24 * 60 * 60
   const dateFilter = `after:${afterEpoch}`
@@ -1061,7 +882,7 @@ async function scanInbox(
   // Process in parallel batches of 15 — bank parsers are instant, AI calls ~1s each
   for (let i = 0; i < messages.length; i += 15) {
     const batch = messages.slice(i, i + 15)
-    const results = await Promise.all(batch.map(msg => parseMessage(msg, accessToken, accountKey)))
+    const results = await Promise.all(batch.map(msg => parseMessage(msg, accessToken, accountKey, userContext)))
     for (const r of results) raw.push(...r)
   }
 
@@ -1287,6 +1108,40 @@ serve(async (req) => {
       return jsonError('Nenhuma conta Gmail conectada. Adicione uma conta primeiro.', 400)
     }
 
+    // Build personalized context from user's past transactions (fetched once for all accounts)
+    let userContext: string | undefined
+    try {
+      const { data: patterns } = await adminClient
+        .from('transactions')
+        .select('description, category, type')
+        .eq('user_id', user.id)
+        .gte('created_at', new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString())
+        .not('source_id', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(200)
+
+      if (patterns && patterns.length > 0) {
+        // Aggregate by description+category+type
+        const freq = new Map<string, UserPattern>()
+        for (const p of patterns as any[]) {
+          const key = `${p.description?.toLowerCase()}|${p.category}|${p.type}`
+          if (freq.has(key)) {
+            freq.get(key)!.freq++
+          } else {
+            freq.set(key, { description: p.description ?? '', category: p.category ?? 'Outros', type: p.type, freq: 1 })
+          }
+        }
+        const sorted = Array.from(freq.values()).sort((a, b) => b.freq - a.freq)
+
+        const incomes = patterns.filter((p: any) => p.type === 'income')
+        const expenses = patterns.filter((p: any) => p.type === 'expense')
+        const avgIncome = incomes.length ? 0 : 0 // aggregate query not needed — context already helps
+        const avgExpense = 0
+
+        userContext = buildUserContext(sorted, avgIncome, avgExpense)
+      }
+    } catch { /* context is optional — scan proceeds without it */ }
+
     const allTransactions: ParsedTransaction[] = []
     let totalScanned = 0
     const accountResults: Array<{ email: string; scanned: number; found: number; error?: string }> = []
@@ -1298,7 +1153,7 @@ serve(async (req) => {
           accountResults.push({ email: account.email, scanned: 0, found: 0, error: 'Token inválido — reconecte essa conta' })
           continue
         }
-        const { transactions: tx, scanned } = await scanInbox(accessToken, days, account.email)
+        const { transactions: tx, scanned } = await scanInbox(accessToken, days, account.email, userContext)
         allTransactions.push(...tx)
         totalScanned += scanned
         accountResults.push({ email: account.email, scanned, found: tx.length })
