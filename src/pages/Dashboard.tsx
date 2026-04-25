@@ -33,6 +33,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { AIChat } from "@/components/AIChat";
 import { FinancialReports } from "@/components/FinancialReports";
 import { RevenuePrediction } from "@/components/RevenuePrediction";
+import { DASAlertBanner } from "@/components/DASAlertBanner";
 import {
   BarChart, Bar
 } from "recharts";
@@ -302,6 +303,9 @@ const Dashboard = () => {
       {/* ─── Main Content ─── */}
       <main className="container mx-auto px-4 py-6">
         <div className="max-w-5xl mx-auto space-y-6">
+
+          {/* DAS Alert — only visible days 15–20 of each month */}
+          {user?.id && <DASAlertBanner userId={user.id} />}
 
           {/* ════════ DASHBOARD (default) ════════ */}
           {activeSection === 'dashboard' && (
