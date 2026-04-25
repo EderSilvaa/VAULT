@@ -908,22 +908,36 @@ async function parseMessage(msg: any, accessToken: string, accountKey?: string):
   const statementItems = parseCreditCardStatement(body, msg.id, date, senderName, accountKey)
   if (statementItems) return statementItems
 
-  // Standard single-transaction parsing
+  // AI fallback — GPT-4o-mini understands context, filters spam, detects income
+  const aiResult = await parseWithAI(subject, body, senderName)
+  if (aiResult !== null) {
+    if (!aiResult.isTransaction) return []
+    const installment = detectInstallment(combined)
+    return [{
+      type: aiResult.type,
+      amount: aiResult.amount,
+      description: aiResult.description,
+      category: aiResult.category,
+      date,
+      source: `Gmail: ${senderName || from}`,
+      source_id: `${idPrefix}${msg.id}`,
+      confidence: aiResult.confidence,
+      installment,
+    }]
+  }
+
+  // Regex fallback if AI is unavailable
   const { value: amount, score } = extractBestAmount(combined)
-  if (amount < 1) return [] // Filter micro-amounts (tarifas de centavos)
+  if (amount < 1) return []
 
   const description = extractRichDescription(subject, body, senderName)
   const confidence: 'high' | 'medium' | 'low' = score >= 8 ? 'high' : score >= 5 ? 'medium' : 'low'
   const installment = detectInstallment(combined)
 
-  const finalDescription = installment
-    ? `${description} (${installment.current}/${installment.total})`
-    : description
-
   return [{
     type: detectType(subject, body),
     amount,
-    description: finalDescription,
+    description: installment ? `${description} (${installment.current}/${installment.total})` : description,
     category: detectCategory(combined),
     date,
     source: `Gmail: ${senderName || from}`,
@@ -931,6 +945,92 @@ async function parseMessage(msg: any, accessToken: string, accountKey?: string):
     confidence,
     installment,
   }]
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// AI-powered parser using GPT-4o-mini
+// Returns null if AI is unavailable (caller falls back to regex)
+// Returns {isTransaction: false} if it's spam/marketing
+// ──────────────────────────────────────────────────────────────────────
+interface AIParseResult {
+  isTransaction: boolean
+  type: 'income' | 'expense'
+  amount: number
+  description: string
+  category: string
+  confidence: 'high' | 'medium' | 'low'
+}
+
+async function parseWithAI(
+  subject: string,
+  body: string,
+  senderName: string
+): Promise<AIParseResult | null> {
+  const apiKey = Deno.env.get('OPENAI_API_KEY')
+  if (!apiKey) return null
+
+  // Truncate body to keep costs low (~$0.001 per email)
+  const truncatedBody = body.slice(0, 3000)
+
+  const prompt = `Você é um extrator de transações financeiras para um app de contabilidade de pequenas empresas brasileiras (MEI).
+
+Analise o e-mail e determine se representa uma transação financeira CONFIRMADA.
+
+Remetente: ${senderName}
+Assunto: ${subject}
+Corpo: ${truncatedBody}
+
+Retorne APENAS JSON no formato:
+{
+  "isTransaction": boolean,
+  "type": "income" | "expense",
+  "amount": number,
+  "description": "string max 60 chars em pt-BR",
+  "category": "Vendas" | "Fornecedores" | "Fixo" | "Variável" | "Receita" | "Salários" | "Aluguel" | "Serviços" | "Marketing" | "Impostos" | "Outros",
+  "confidence": "high" | "medium" | "low"
+}
+
+Regras:
+- isTransaction=true SOMENTE para: comprovante PIX enviado/recebido, TED confirmada, boleto pago, NF-e, assinatura cobrada, fatura paga, recibo de pagamento
+- isTransaction=false para: ofertas de crédito, marketing, "regularize sua dívida", "pague agora" sem comprovante, promoções, alertas sem transação confirmada
+- amount: número BRL sem símbolo (ex: 150.00)
+- type=income: dinheiro ENTRANDO na conta (recebimentos, vendas, pix recebido)
+- type=expense: dinheiro SAINDO (pagamentos, boletos, assinaturas, pix enviado)
+- confidence=high: valor e tipo certos; medium: valor provável; low: ambíguo`
+
+  try {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: prompt }],
+        response_format: { type: 'json_object' },
+        temperature: 0,
+        max_tokens: 150,
+      }),
+      signal: AbortSignal.timeout(8000), // 8s timeout — don't block the scan
+    })
+
+    if (!res.ok) return null
+
+    const data = await res.json()
+    const content = data.choices?.[0]?.message?.content
+    if (!content) return null
+
+    const parsed: AIParseResult = JSON.parse(content)
+
+    // Validate required fields
+    if (typeof parsed.isTransaction !== 'boolean') return null
+    if (parsed.isTransaction && (typeof parsed.amount !== 'number' || parsed.amount <= 0)) return null
+
+    return parsed
+  } catch {
+    return null // Timeout, network error, invalid JSON — fall back to regex
+  }
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -957,8 +1057,12 @@ async function scanInbox(
 
   const messages = await fetchMessages(ids, accessToken)
   const raw: ParsedTransaction[] = []
-  for (const msg of messages) {
-    raw.push(...await parseMessage(msg, accessToken, accountKey))
+
+  // Process in parallel batches of 15 — bank parsers are instant, AI calls ~1s each
+  for (let i = 0; i < messages.length; i += 15) {
+    const batch = messages.slice(i, i + 15)
+    const results = await Promise.all(batch.map(msg => parseMessage(msg, accessToken, accountKey)))
+    for (const r of results) raw.push(...r)
   }
 
   // Per-account dedup (cross-account dedup happens in the caller)
