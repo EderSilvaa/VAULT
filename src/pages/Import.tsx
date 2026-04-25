@@ -3,17 +3,17 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
-  Upload, FileText, Loader2, ArrowLeft, Check, X, FileSpreadsheet,
-  ArrowUpDown, ChevronDown, Trash2, Mail, RefreshCw
+  Upload, FileText, Loader2, ArrowLeft, Check, FileSpreadsheet,
+  Trash2, Mail, RefreshCw, Plus, AlertCircle
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { parseCSV, parseOFX, parseXLSX, type ImportedTransaction } from '@/utils/parsers'
 import { useTransactions } from '@/hooks/useTransactions'
 import { useAuth } from '@/hooks/useAuth'
 import { TRANSACTION_CATEGORIES } from '@/lib/validations'
-import { format } from 'date-fns'
+import { format, formatDistanceToNow } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { gmailService } from '@/services/gmail.service'
+import { gmailAccountsService, type GmailAccount, type ScanAccountResult } from '@/services/gmailAccounts.service'
 
 type Step = 'upload' | 'preview'
 type Tab = 'files' | 'gmail'
@@ -30,13 +30,13 @@ const Import = () => {
   const [isParsing, setIsParsing] = useState(false)
   const [parsedTransactions, setParsedTransactions] = useState<ImportedTransaction[]>([])
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
-  const [gmailConnected, setGmailConnected] = useState(false)
+  const [accounts, setAccounts] = useState<GmailAccount[]>([])
+  const [accountsLoading, setAccountsLoading] = useState(true)
+  const [isAddingAccount, setIsAddingAccount] = useState(false)
   const [isScanningGmail, setIsScanningGmail] = useState(false)
-  const [gmailScanned, setGmailScanned] = useState(0)
   const [gmailDays, setGmailDays] = useState(90)
   const [scanStage, setScanStage] = useState('')
-  const [lastScan, setLastScan] = useState<{ scannedAt: string; emailsScanned: number; transactionsFound: number } | null>(null)
-  const [scanInfo, setScanInfo] = useState<{ isIncremental: boolean; effectiveDays: number } | null>(null)
+  const [scanResults, setScanResults] = useState<ScanAccountResult[] | null>(null)
   const [previewFilter, setPreviewFilter] = useState<'all' | 'review'>('all')
   const { toast } = useToast()
   const navigate = useNavigate()
@@ -45,77 +45,94 @@ const Import = () => {
 
   const ACCEPTED_EXTENSIONS = ['.csv', '.ofx', '.xlsx', '.xls']
 
-  const handleConnectGmail = async () => {
+  const refreshAccounts = async () => {
+    if (!user?.id) return
     try {
-      await gmailService.connectGmail()
+      const list = await gmailAccountsService.list(user.id)
+      setAccounts(list)
     } catch (err: any) {
-      toast({ title: 'Erro ao conectar Gmail', description: err.message, variant: 'destructive' })
+      toast({ title: 'Erro ao carregar contas', description: err.message, variant: 'destructive' })
+    } finally {
+      setAccountsLoading(false)
+    }
+  }
+
+  const handleAddAccount = async () => {
+    setIsAddingAccount(true)
+    try {
+      const { email } = await gmailAccountsService.connectAccount()
+      toast({ title: 'Conta conectada', description: email })
+      await refreshAccounts()
+    } catch (err: any) {
+      toast({ title: 'Erro ao conectar conta', description: err.message, variant: 'destructive' })
+    } finally {
+      setIsAddingAccount(false)
+    }
+  }
+
+  const handleDisconnect = async (account: GmailAccount) => {
+    if (!confirm(`Desconectar ${account.email}?`)) return
+    try {
+      await gmailAccountsService.disconnect(account.id)
+      toast({ title: 'Conta desconectada', description: account.email })
+      await refreshAccounts()
+    } catch (err: any) {
+      toast({ title: 'Erro ao desconectar', description: err.message, variant: 'destructive' })
     }
   }
 
   const handleGmailScan = async () => {
+    if (accounts.length === 0) {
+      toast({ title: 'Nenhuma conta conectada', description: 'Adicione uma conta Gmail primeiro.', variant: 'destructive' })
+      return
+    }
+
     setIsScanningGmail(true)
     setScanStage('Conectando ao Gmail...')
+    setScanResults(null)
 
-    // Progress stages to give visual feedback while Edge Function runs
-    const stages = [
+    const baseStages = [
       { delay: 2000, text: 'Buscando e-mails financeiros...' },
       { delay: 6000, text: 'Analisando conteúdo dos e-mails...' },
       { delay: 12000, text: 'Extraindo valores e categorias...' },
       { delay: 20000, text: 'Quase lá, finalizando análise...' },
     ]
-    const timers = stages.map(({ delay, text }) =>
+    const timers = baseStages.map(({ delay, text }) =>
       setTimeout(() => setScanStage(text), delay)
     )
 
     try {
-      const { transactions, scanned, isIncremental, effectiveDays } = await gmailService.parseEmails(user?.id ?? '', gmailDays)
+      const { transactions, scanned, accounts: results } = await gmailAccountsService.scanAll(gmailDays)
       timers.forEach(clearTimeout)
-      setGmailScanned(scanned)
-      setScanInfo({ isIncremental, effectiveDays })
+      setScanResults(results)
+      await refreshAccounts()
 
       if (transactions.length === 0) {
         toast({
           title: 'Nenhuma transação encontrada',
-          description: `Verificamos ${scanned} e-mails nos últimos ${effectiveDays} dias sem encontrar valores financeiros reconhecíveis.`,
+          description: `Verificamos ${scanned} e-mails em ${results.length} conta${results.length !== 1 ? 's' : ''} sem encontrar valores financeiros.`,
         })
         setIsScanningGmail(false)
         return
       }
 
       setParsedTransactions(transactions)
-      // Auto-deselect low-confidence transactions — they go to the review queue
       setSelectedIds(new Set(transactions.map((_, i) => i).filter(i => transactions[i].confidence !== 'low')))
       setPreviewFilter('all')
       setStep('preview')
     } catch (err: any) {
       timers.forEach(clearTimeout)
-      if (err.message?.includes('expirado') || err.message?.includes('Token')) {
-        setGmailConnected(false)
-      }
-      toast({ title: 'Erro ao escanear Gmail', description: err.message, variant: 'destructive' })
+      toast({ title: 'Erro ao escanear', description: err.message, variant: 'destructive' })
     } finally {
       setIsScanningGmail(false)
       setScanStage('')
     }
   }
 
-  // Check if Gmail is connected and auto-scan on redirect back from OAuth
   useEffect(() => {
-    gmailService.isConnected().then(connected => {
-      setGmailConnected(connected)
-      const oauthPending = localStorage.getItem('gmail_oauth_pending')
-      if (connected && (oauthPending || searchParams.get('tab') === 'gmail')) {
-        localStorage.removeItem('gmail_oauth_pending')
-        if (user?.id) gmailService.saveRefreshToken(user.id)
-        handleGmailScan()
-      }
-    })
-    if (user?.id) {
-      gmailService.getLastScan(user.id).then(setLastScan)
-    }
+    if (user?.id) refreshAccounts()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [user?.id])
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
@@ -329,44 +346,98 @@ const Import = () => {
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
                   <Mail className="w-5 h-5 text-primary" />
-                  Escanear e-mails financeiros
+                  Contas conectadas
                 </CardTitle>
                 <CardDescription>
-                  O Vault busca automaticamente NF-e, PIX, boletos e confirmações de pagamento
-                  nos seus e-mails. Escolha o período desejado.
+                  Conecte uma ou mais contas Gmail. O Vault escaneia todas em busca de
+                  NF-e, PIX, boletos e confirmações de pagamento.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {!gmailConnected ? (
+                {accountsLoading ? (
+                  <div className="flex items-center justify-center py-6 text-muted-foreground">
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    Carregando contas...
+                  </div>
+                ) : accounts.length === 0 ? (
                   <div className="flex flex-col items-center gap-4 py-6 text-center">
                     <div className="p-4 rounded-full bg-primary/10">
                       <Mail className="w-8 h-8 text-primary" />
                     </div>
                     <div>
-                      <p className="font-medium">Conecte sua conta Google</p>
+                      <p className="font-medium">Nenhuma conta conectada</p>
                       <p className="text-sm text-muted-foreground mt-1">
                         Permissão somente leitura — o Vault nunca envia e-mails.
                       </p>
                     </div>
-                    <Button onClick={handleConnectGmail} className="gap-2">
-                      <Mail className="w-4 h-4" />
-                      Conectar Gmail
+                    <Button onClick={handleAddAccount} disabled={isAddingAccount} className="gap-2">
+                      {isAddingAccount ? (
+                        <><Loader2 className="w-4 h-4 animate-spin" />Aguardando autorização...</>
+                      ) : (
+                        <><Plus className="w-4 h-4" />Conectar primeira conta</>
+                      )}
                     </Button>
                   </div>
                 ) : (
-                  <div className="flex flex-col items-center gap-4 py-4 text-center">
-                    <div className="flex items-center gap-2 text-sm text-green-600 font-medium">
-                      <Check className="w-4 h-4" />
-                      Gmail conectado
-                    </div>
-                    {(lastScan || gmailScanned > 0) && (
-                      <p className="text-xs text-muted-foreground">
-                        {lastScan
-                          ? `Último scan: ${format(new Date(lastScan.scannedAt), "dd/MM 'às' HH:mm", { locale: ptBR })} — ${lastScan.emailsScanned} e-mails, ${lastScan.transactionsFound} transações`
-                          : `${gmailScanned} e-mails verificados`}
-                      </p>
-                    )}
-                    <div className="flex items-center gap-2">
+                  <div className="space-y-2">
+                    {accounts.map((account) => {
+                      const result = scanResults?.find(r => r.email === account.email)
+                      return (
+                        <div
+                          key={account.id}
+                          className="flex items-center justify-between p-3 border rounded-lg bg-card gap-3"
+                        >
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <div className="p-2 rounded-md bg-muted shrink-0">
+                              <Mail className="w-4 h-4 text-foreground" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="font-medium text-sm truncate" title={account.email}>
+                                {account.email}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {result?.error ? (
+                                  <span className="inline-flex items-center gap-1 text-red-500">
+                                    <AlertCircle className="w-3 h-3" />
+                                    {result.error}
+                                  </span>
+                                ) : result ? (
+                                  `Escaneou ${result.scanned} e-mails — ${result.found} transações`
+                                ) : account.last_scan_at ? (
+                                  `Último scan: ${formatDistanceToNow(new Date(account.last_scan_at), { locale: ptBR, addSuffix: true })}`
+                                ) : (
+                                  'Ainda não escaneada'
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDisconnect(account)}
+                            disabled={isScanningGmail}
+                            className="text-muted-foreground hover:text-red-500"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      )
+                    })}
+
+                    <Button
+                      variant="outline"
+                      onClick={handleAddAccount}
+                      disabled={isAddingAccount || isScanningGmail}
+                      className="w-full gap-2"
+                    >
+                      {isAddingAccount ? (
+                        <><Loader2 className="w-4 h-4 animate-spin" />Aguardando autorização...</>
+                      ) : (
+                        <><Plus className="w-4 h-4" />Adicionar outra conta</>
+                      )}
+                    </Button>
+
+                    <div className="flex items-center gap-2 pt-3 border-t">
                       <select
                         value={gmailDays}
                         onChange={(e) => setGmailDays(Number(e.target.value))}
@@ -379,16 +450,18 @@ const Import = () => {
                         <option value={180}>180 dias</option>
                         <option value={365}>1 ano</option>
                       </select>
-                      <Button onClick={handleGmailScan} disabled={isScanningGmail} className="gap-2">
+                      <Button
+                        onClick={handleGmailScan}
+                        disabled={isScanningGmail || isAddingAccount}
+                        className="flex-1 gap-2"
+                      >
                         {isScanningGmail ? (
                           <><Loader2 className="w-4 h-4 animate-spin" />{scanStage || 'Escaneando...'}</>
                         ) : (
-                          <><RefreshCw className="w-4 h-4" />Escanear e-mails</>
+                          <><RefreshCw className="w-4 h-4" />
+                            Escanear {accounts.length === 1 ? 'conta' : `${accounts.length} contas`}
+                          </>
                         )}
-                      </Button>
-                      <Button variant="outline" onClick={handleConnectGmail} className="gap-2" size="sm">
-                        <Mail className="w-3 h-3" />
-                        Reconectar
                       </Button>
                     </div>
                   </div>
@@ -522,11 +595,9 @@ const Import = () => {
             <h1 className="text-xl md:text-2xl font-bold">Revisar Transações</h1>
             <p className="text-sm text-muted-foreground">
               {parsedTransactions.length} transações encontradas
-              {scanInfo && (
+              {scanResults && scanResults.length > 0 && (
                 <span className="ml-1 text-xs">
-                  — {scanInfo.isIncremental
-                    ? `scan incremental (${scanInfo.effectiveDays} dia${scanInfo.effectiveDays !== 1 ? 's' : ''})`
-                    : `scan completo (${scanInfo.effectiveDays} dias)`}
+                  — {scanResults.length} conta{scanResults.length !== 1 ? 's' : ''}
                 </span>
               )}
             </p>

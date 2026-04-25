@@ -20,6 +20,7 @@ const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Profile = lazy(() => import("./pages/Profile"));
 const TaxDashboard = lazy(() => import("./pages/TaxDashboard"));
 const Import = lazy(() => import("./pages/Import"));
+const OAuthGmailCallback = lazy(() => import("./pages/OAuthGmailCallback"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 // Prefetch critical routes after initial paint (Landing → Simulator → Results → Signup)
@@ -105,6 +106,7 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
+            <Route path="/oauth/gmail-callback" element={<OAuthGmailCallback />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

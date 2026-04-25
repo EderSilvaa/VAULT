@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -621,7 +622,7 @@ function extractRelevantDate(text: string): string | null {
 // Parse credit card statement — extract individual purchases
 // Returns multiple transactions if line items found, otherwise null
 // ──────────────────────────────────────────────────────────────────────
-function parseCreditCardStatement(body: string, msgId: string, date: string, senderName: string): ParsedTransaction[] | null {
+function parseCreditCardStatement(body: string, msgId: string, date: string, senderName: string, accountKey?: string): ParsedTransaction[] | null {
   const text = body.toLowerCase()
 
   // Only trigger for credit card statements
@@ -663,7 +664,7 @@ function parseCreditCardStatement(body: string, msgId: string, date: string, sen
         category: detectCategory(desc),
         date,
         source: `Gmail: ${senderName} (fatura)`,
-        source_id: `gmail:${msgId}:item${idx++}`,
+        source_id: `gmail:${accountKey ? accountKey + ':' : ''}${msgId}:item${idx++}`,
         confidence: 'medium',
       })
     }
@@ -806,7 +807,8 @@ function parseNFeXML(xml: string): { amount: number; emitter: string; date: stri
 // Parse single message → transaction(s)
 // Returns array: usually 1 item, but credit card statements can be many
 // ──────────────────────────────────────────────────────────────────────
-async function parseMessage(msg: any, accessToken: string): Promise<ParsedTransaction[]> {
+async function parseMessage(msg: any, accessToken: string, accountKey?: string): Promise<ParsedTransaction[]> {
+  const idPrefix = accountKey ? `gmail:${accountKey}:` : 'gmail:'
   const headers: Array<{ name: string; value: string }> = msg.payload?.headers || []
   const subject = headers.find(h => h.name === 'Subject')?.value || ''
   const from = headers.find(h => h.name === 'From')?.value || ''
@@ -845,7 +847,7 @@ async function parseMessage(msg: any, accessToken: string): Promise<ParsedTransa
           category: detectCategory(nfe.emitter || subject),
           date,
           source: `Gmail: ${senderName || from} (NF-e)`,
-          source_id: `gmail:${msg.id}:nfe`,
+          source_id: `${idPrefix}${msg.id}:nfe`,
           confidence: 'high' as const,
         }]
       }
@@ -895,7 +897,7 @@ async function parseMessage(msg: any, accessToken: string): Promise<ParsedTransa
         category: bankResult.category,
         date,
         source: `Gmail: ${senderName || from}`,
-        source_id: `gmail:${msg.id}`,
+        source_id: `${idPrefix}${msg.id}`,
         confidence: 'high' as const,
         installment: detectInstallment(combined),
       }]
@@ -903,7 +905,7 @@ async function parseMessage(msg: any, accessToken: string): Promise<ParsedTransa
   }
 
   // Try to parse as credit card statement with individual items
-  const statementItems = parseCreditCardStatement(body, msg.id, date, senderName)
+  const statementItems = parseCreditCardStatement(body, msg.id, date, senderName, accountKey)
   if (statementItems) return statementItems
 
   // Standard single-transaction parsing
@@ -925,10 +927,49 @@ async function parseMessage(msg: any, accessToken: string): Promise<ParsedTransa
     category: detectCategory(combined),
     date,
     source: `Gmail: ${senderName || from}`,
-    source_id: `gmail:${msg.id}`,
+    source_id: `${idPrefix}${msg.id}`,
     confidence,
     installment,
   }]
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Scan a single Gmail inbox using a fresh access token
+// Returns parsed transactions + total messages scanned
+// ──────────────────────────────────────────────────────────────────────
+async function scanInbox(
+  accessToken: string,
+  days: number,
+  accountKey?: string
+): Promise<{ transactions: ParsedTransaction[]; scanned: number }> {
+  const afterEpoch = Math.floor(Date.now() / 1000) - days * 24 * 60 * 60
+  const dateFilter = `after:${afterEpoch}`
+  const bankQuery = `(${BANK_QUERY}) ${dateFilter}`
+  const keywordQuery = `(${KEYWORD_QUERY}) ${dateFilter} -category:promotions -category:social`
+
+  const [bankIds, keywordIds] = await Promise.all([
+    listAllMessages(accessToken, bankQuery, 300),
+    listAllMessages(accessToken, keywordQuery, 300),
+  ])
+
+  const ids = Array.from(new Set([...bankIds, ...keywordIds]))
+  console.log(`[scanInbox${accountKey ? ` ${accountKey}` : ''}] banks:${bankIds.length} keywords:${keywordIds.length} unique:${ids.length}`)
+
+  const messages = await fetchMessages(ids, accessToken)
+  const raw: ParsedTransaction[] = []
+  for (const msg of messages) {
+    raw.push(...await parseMessage(msg, accessToken, accountKey))
+  }
+
+  // Per-account dedup (cross-account dedup happens in the caller)
+  const seen = new Set<string>()
+  const unique = raw.filter(t => {
+    if (seen.has(t.source_id)) return false
+    seen.add(t.source_id)
+    return true
+  })
+
+  return { transactions: unique, scanned: messages.length }
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -1037,102 +1078,157 @@ async function fetchMessages(ids: string[], token: string, batchSize = 10, timeL
 
 // ──────────────────────────────────────────────────────────────────────
 // Main handler
+// Two modes:
+//   1. Legacy (single account): caller passes provider_token / provider_refresh_token
+//   2. Multi-account: caller passes only `days` + Authorization header (user JWT).
+//      Edge Function reads gmail_accounts table and scans each one.
 // ──────────────────────────────────────────────────────────────────────
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
 
   try {
-    const { provider_token, provider_refresh_token, days = 90 } = await req.json()
+    const body = await req.json()
+    const { provider_token, provider_refresh_token, days = 90 } = body
 
-    if (!provider_token && !provider_refresh_token) {
+    // ────────────── Legacy single-account mode ──────────────
+    if (provider_token || provider_refresh_token) {
+      let accessToken: string = provider_token
+      let tokenRefreshed = false
+
+      if (!accessToken && provider_refresh_token) {
+        const refreshed = await refreshGoogleToken(provider_refresh_token)
+        if (!refreshed) return jsonError('Sessão do Gmail expirada. Reconecte sua conta Google.', 401)
+        accessToken = refreshed
+        tokenRefreshed = true
+      }
+
+      const { transactions: raw, scanned } = await scanInbox(accessToken, days)
+      const transactions = detectRecurring(raw)
+      transactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+
       return new Response(
-        JSON.stringify({ error: 'Gmail não conectado. Conecte sua conta Google.' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({
+          transactions,
+          scanned,
+          found: transactions.length,
+          token_refreshed: tokenRefreshed,
+          new_access_token: tokenRefreshed ? accessToken : undefined,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    // FIX 3: Try to get a valid token — refresh if needed
-    let accessToken: string = provider_token
-    let tokenRefreshed = false
+    // ────────────── Multi-account mode ──────────────
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) return jsonError('Authorization header required', 401)
 
-    if (!accessToken && provider_refresh_token) {
-      const refreshed = await refreshGoogleToken(provider_refresh_token)
-      if (!refreshed) {
-        return new Response(
-          JSON.stringify({ error: 'Sessão do Gmail expirada. Reconecte sua conta Google.' }),
-          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
-      }
-      accessToken = refreshed
-      tokenRefreshed = true
-    }
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
-    // Two-pass query: banks (high precision) + keywords (broader)
-    const afterEpoch = Math.floor(Date.now() / 1000) - days * 24 * 60 * 60
-    const dateFilter = `after:${afterEpoch}`
-    const bankQuery = `(${BANK_QUERY}) ${dateFilter}`
-    const keywordQuery = `(${KEYWORD_QUERY}) ${dateFilter} -category:promotions -category:social`
-
-    console.log('[parse-gmail] days:', days, 'bank senders:', BANK_SENDERS.length)
-
-    // Run both queries in parallel for speed
-    const [bankIds, keywordIds] = await Promise.all([
-      listAllMessages(accessToken, bankQuery, 300),
-      listAllMessages(accessToken, keywordQuery, 300),
-    ])
-
-    // Merge and deduplicate IDs
-    const idSet = new Set([...bankIds, ...keywordIds])
-    const ids = Array.from(idSet)
-
-    console.log('[parse-gmail] banks:', bankIds.length, 'keywords:', keywordIds.length, 'unique:', ids.length)
-
-    // If token expired mid-request, refresh and retry
-    if (ids.length === 0 && provider_refresh_token && !tokenRefreshed) {
-      const refreshed = await refreshGoogleToken(provider_refresh_token)
-      if (refreshed) {
-        accessToken = refreshed
-        const retryIds = await listAllMessages(accessToken, keywordQuery, 200)
-        ids.push(...retryIds)
-        tokenRefreshed = true
-      }
-    }
-
-    // Fetch full messages in parallel batches
-    const messages = await fetchMessages(ids, accessToken)
-
-    const rawTransactions: ParsedTransaction[] = []
-    for (const msg of messages) {
-      rawTransactions.push(...await parseMessage(msg, accessToken))
-    }
-
-    // Deduplicate by source_id (safety net for overlapping scans)
-    const seenIds = new Set<string>()
-    const uniqueRaw = rawTransactions.filter(t => {
-      if (seenIds.has(t.source_id)) return false
-      seenIds.add(t.source_id)
-      return true
+    const userClient = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authHeader } },
     })
+    const { data: { user }, error: userErr } = await userClient.auth.getUser()
+    if (userErr || !user) return jsonError('Sessão inválida', 401)
 
-    // Detect recurring patterns and sort by date desc
-    const transactions = detectRecurring(uniqueRaw)
-    transactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    const adminClient = createClient(supabaseUrl, serviceKey)
+
+    let accounts = (await adminClient
+      .from('gmail_accounts')
+      .select('id, email, refresh_token')
+      .eq('user_id', user.id)).data as Array<{ id: string; email: string; refresh_token: string }> | null
+
+    // Auto-migration: if no accounts but user has the legacy token in profiles,
+    // discover the email via Gmail API and migrate it into gmail_accounts.
+    if (!accounts || accounts.length === 0) {
+      const { data: profile } = await adminClient
+        .from('profiles')
+        .select('gmail_refresh_token')
+        .eq('id', user.id)
+        .single()
+      const legacyToken = (profile as any)?.gmail_refresh_token
+      if (legacyToken) {
+        const accessToken = await refreshGoogleToken(legacyToken)
+        if (accessToken) {
+          const profileRes = await fetch(
+            'https://gmail.googleapis.com/gmail/v1/users/me/profile',
+            { headers: { Authorization: `Bearer ${accessToken}` } }
+          )
+          if (profileRes.ok) {
+            const gp = await profileRes.json()
+            const email = gp.emailAddress
+            if (email) {
+              await adminClient.from('gmail_accounts').upsert(
+                { user_id: user.id, email, refresh_token: legacyToken },
+                { onConflict: 'user_id,email' }
+              )
+              accounts = [{
+                id: '', // re-read below
+                email,
+                refresh_token: legacyToken,
+              }]
+              const fresh = await adminClient
+                .from('gmail_accounts')
+                .select('id, email, refresh_token')
+                .eq('user_id', user.id)
+              accounts = fresh.data as any
+            }
+          }
+        }
+      }
+    }
+
+    if (!accounts || accounts.length === 0) {
+      return jsonError('Nenhuma conta Gmail conectada. Adicione uma conta primeiro.', 400)
+    }
+
+    const allTransactions: ParsedTransaction[] = []
+    let totalScanned = 0
+    const accountResults: Array<{ email: string; scanned: number; found: number; error?: string }> = []
+
+    for (const account of accounts) {
+      try {
+        const accessToken = await refreshGoogleToken(account.refresh_token)
+        if (!accessToken) {
+          accountResults.push({ email: account.email, scanned: 0, found: 0, error: 'Token inválido — reconecte essa conta' })
+          continue
+        }
+        const { transactions: tx, scanned } = await scanInbox(accessToken, days, account.email)
+        allTransactions.push(...tx)
+        totalScanned += scanned
+        accountResults.push({ email: account.email, scanned, found: tx.length })
+        await adminClient
+          .from('gmail_accounts')
+          .update({ last_scan_at: new Date().toISOString() })
+          .eq('id', account.id)
+      } catch (err: any) {
+        accountResults.push({ email: account.email, scanned: 0, found: 0, error: err.message })
+      }
+    }
+
+    // Recurrence detection across all accounts
+    const finalTransactions = detectRecurring(allTransactions)
+    finalTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
     return new Response(
       JSON.stringify({
-        transactions,
-        scanned: messages.length,
-        found: transactions.length,
-        token_refreshed: tokenRefreshed,
-        new_access_token: tokenRefreshed ? accessToken : undefined,
+        transactions: finalTransactions,
+        scanned: totalScanned,
+        found: finalTransactions.length,
+        accounts: accountResults,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
 
   } catch (error: any) {
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    return jsonError(error.message ?? 'Unknown error', 500)
   }
 })
+
+function jsonError(message: string, status: number): Response {
+  return new Response(
+    JSON.stringify({ error: message }),
+    { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+  )
+}
