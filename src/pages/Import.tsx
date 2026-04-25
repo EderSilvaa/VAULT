@@ -253,14 +253,19 @@ const Import = () => {
     return candidate.includes('@') ? candidate : null
   }
 
+  // Prefer scanResults as source of truth (includes accounts with 0 transactions).
+  // Fall back to deriving from source_ids for file imports.
   const gmailAccounts = useMemo(() => {
+    if (scanResults && scanResults.length >= 2) {
+      return scanResults.map(r => r.email)
+    }
     const emails = new Set<string>()
     parsedTransactions.forEach(t => {
       const email = getAccountEmail(t.source_id)
       if (email) emails.add(email)
     })
     return Array.from(emails)
-  }, [parsedTransactions])
+  }, [parsedTransactions, scanResults])
 
   const visibleTransactions = useMemo(() =>
     parsedTransactions
