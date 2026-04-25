@@ -38,6 +38,7 @@ const Import = () => {
   const [scanStage, setScanStage] = useState('')
   const [scanResults, setScanResults] = useState<ScanAccountResult[] | null>(null)
   const [previewFilter, setPreviewFilter] = useState<'all' | 'review'>('all')
+  const [accountFilter, setAccountFilter] = useState<string>('all')
   const { toast } = useToast()
   const navigate = useNavigate()
   const { user } = useAuth()
@@ -119,6 +120,7 @@ const Import = () => {
       setParsedTransactions(transactions)
       setSelectedIds(new Set(transactions.map((_, i) => i).filter(i => transactions[i].confidence !== 'low')))
       setPreviewFilter('all')
+      setAccountFilter('all')
       setStep('preview')
     } catch (err: any) {
       timers.forEach(clearTimeout)
@@ -242,12 +244,45 @@ const Import = () => {
     })
   }
 
+  const getAccountEmail = (sourceId: string): string | null => {
+    if (!sourceId?.startsWith('gmail:')) return null
+    const after = sourceId.slice(6)
+    const colon = after.indexOf(':')
+    if (colon === -1) return null
+    const candidate = after.slice(0, colon)
+    return candidate.includes('@') ? candidate : null
+  }
+
+  const gmailAccounts = useMemo(() => {
+    const emails = new Set<string>()
+    parsedTransactions.forEach(t => {
+      const email = getAccountEmail(t.source_id)
+      if (email) emails.add(email)
+    })
+    return Array.from(emails)
+  }, [parsedTransactions])
+
+  const visibleTransactions = useMemo(() =>
+    parsedTransactions
+      .map((t, i) => ({ t, i }))
+      .filter(({ t }) => {
+        if (accountFilter !== 'all' && getAccountEmail(t.source_id) !== accountFilter) return false
+        if (previewFilter === 'review' && t.confidence !== 'low') return false
+        return true
+      }),
+    [parsedTransactions, accountFilter, previewFilter]
+  )
+
   const toggleSelectAll = () => {
-    if (selectedIds.size === parsedTransactions.length) {
-      setSelectedIds(new Set())
+    const visibleIds = visibleTransactions.map(({ i }) => i)
+    const allSelected = visibleIds.length > 0 && visibleIds.every(id => selectedIds.has(id))
+    const next = new Set(selectedIds)
+    if (allSelected) {
+      visibleIds.forEach(id => next.delete(id))
     } else {
-      setSelectedIds(new Set(parsedTransactions.map((_, i) => i)))
+      visibleIds.forEach(id => next.add(id))
     }
+    setSelectedIds(next)
   }
 
   const stats = useMemo(() => {
@@ -634,14 +669,54 @@ const Import = () => {
         </Card>
       </div>
 
-      {/* Legend + filter tabs */}
+      {/* Account tabs — only when there are 2+ Gmail accounts */}
+      {gmailAccounts.length >= 2 && (
+        <div className="overflow-x-auto -mx-1 px-1">
+          <div className="flex gap-1 min-w-max pb-1">
+            <button
+              onClick={() => setAccountFilter('all')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors shrink-0 ${
+                accountFilter === 'all'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Mail className="w-3 h-3" />
+              Todas as contas
+              <span className="opacity-70">({parsedTransactions.length})</span>
+            </button>
+            {gmailAccounts.map(email => {
+              const count = parsedTransactions.filter(t => getAccountEmail(t.source_id) === email).length
+              const label = email.split('@')[0]
+              return (
+                <button
+                  key={email}
+                  onClick={() => setAccountFilter(email)}
+                  title={email}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors shrink-0 ${
+                    accountFilter === email
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Mail className="w-3 h-3" />
+                  <span className="max-w-[120px] truncate">{label}</span>
+                  <span className="opacity-70">({count})</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Legend + confidence filter */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         {parsedTransactions.some(t => t.confidence && t.confidence !== 'high') && (
-          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-yellow-400" /> Confiança média</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400" /> Confiança baixa</span>
             <span className="flex items-center gap-1"><span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 font-medium text-[10px]">2/12</span> Parcela</span>
-          <span className="flex items-center gap-1"><span className="px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 font-medium text-[10px]">recorrente</span> Recorrência detectada</span>
+            <span className="flex items-center gap-1"><span className="px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 font-medium text-[10px]">recorrente</span> Recorrência</span>
           </div>
         )}
         {parsedTransactions.some(t => t.confidence === 'low') && (
@@ -654,7 +729,7 @@ const Import = () => {
                   : 'text-muted-foreground hover:text-foreground hover:bg-muted'
               }`}
             >
-              Todas ({parsedTransactions.length})
+              Todas ({visibleTransactions.length})
             </button>
             <button
               onClick={() => setPreviewFilter('review')}
@@ -665,7 +740,7 @@ const Import = () => {
               }`}
             >
               <span className="w-2 h-2 rounded-full bg-red-400" />
-              Revisão ({parsedTransactions.filter(t => t.confidence === 'low').length})
+              Revisão ({visibleTransactions.filter(({ t }) => t.confidence === 'low').length})
             </button>
           </div>
         )}
@@ -678,7 +753,7 @@ const Import = () => {
           <div className="flex items-center gap-2 px-4 py-3 border-b bg-muted/50 text-xs font-medium text-muted-foreground">
             <input
               type="checkbox"
-              checked={selectedIds.size === parsedTransactions.length}
+              checked={visibleTransactions.length > 0 && visibleTransactions.every(({ i }) => selectedIds.has(i))}
               onChange={toggleSelectAll}
               className="rounded border-muted-foreground/30"
             />
@@ -691,10 +766,14 @@ const Import = () => {
 
           {/* Rows */}
           <div className="max-h-[60vh] overflow-y-auto divide-y">
-            {parsedTransactions
-              .map((t, i) => ({ t, i }))
-              .filter(({ t }) => previewFilter === 'review' ? t.confidence === 'low' : true)
-              .map(({ t, i }) => {
+            {visibleTransactions.length === 0 && (
+              <div className="py-10 text-center text-sm text-muted-foreground">
+                Nenhuma transação nessa conta.
+              </div>
+            )}
+            {visibleTransactions.map(({ t, i }) => {
+              const accountEmail = getAccountEmail(t.source_id)
+              const accountLabel = accountEmail ? accountEmail.split('@')[0] : null
               const isSelected = selectedIds.has(i)
               return (
                 <div
@@ -720,18 +799,26 @@ const Import = () => {
                     })()}
                   </span>
 
-                  <div className="flex-1 min-w-0 flex items-center gap-1.5">
-                    <span className="truncate" title={t.description}>
-                      {t.description}
-                    </span>
-                    {t.installment && (
-                      <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 font-medium">
-                        {t.installment.current}/{t.installment.total}
+                  <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                    <div className="flex items-center gap-1.5">
+                      <span className="truncate" title={t.description}>
+                        {t.description}
                       </span>
-                    )}
-                    {t.isRecurring && (
-                      <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 font-medium" title="Recorrência detectada — mesmo valor em 3+ meses">
-                        recorrente
+                      {t.installment && (
+                        <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 font-medium">
+                          {t.installment.current}/{t.installment.total}
+                        </span>
+                      )}
+                      {t.isRecurring && (
+                        <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 font-medium" title="Recorrência detectada — mesmo valor em 3+ meses">
+                          recorrente
+                        </span>
+                      )}
+                    </div>
+                    {accountLabel && gmailAccounts.length >= 2 && accountFilter === 'all' && (
+                      <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground w-fit">
+                        <Mail className="w-2.5 h-2.5 shrink-0" />
+                        <span className="truncate max-w-[100px]">{accountLabel}</span>
                       </span>
                     )}
                   </div>
