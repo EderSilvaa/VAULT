@@ -152,6 +152,8 @@ export const gmailAccountsService = {
       confidence: t.confidence,
       installment: t.installment,
       isRecurring: t.isRecurring,
+      senderDomain: t.senderDomain,
+      anomaly: t.anomaly,
       raw: { source: t.source },
     }))
 

@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import {
   Upload, FileText, Loader2, ArrowLeft, Check, FileSpreadsheet,
-  Trash2, Mail, RefreshCw, Plus, AlertCircle
+  Trash2, Mail, RefreshCw, Plus, AlertCircle, Zap
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { parseCSV, parseOFX, parseXLSX, type ImportedTransaction } from '@/utils/parsers'
@@ -14,6 +14,7 @@ import { TRANSACTION_CATEGORIES } from '@/lib/validations'
 import { format, formatDistanceToNow } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { gmailAccountsService, type GmailAccount, type ScanAccountResult } from '@/services/gmailAccounts.service'
+import { supabase } from '@/lib/supabase'
 
 type Step = 'upload' | 'preview'
 type Tab = 'files' | 'gmail'
@@ -272,13 +273,40 @@ const Import = () => {
     setIsParsing(false)
   }
 
+  const saveEmailRule = async (
+    t: ImportedTransaction,
+    field: 'category' | 'type',
+    newValue: string
+  ) => {
+    if (!user?.id || !t.source_id?.startsWith('gmail:')) return
+    try {
+      // Prefer sender domain rule; fall back to description rule
+      const rule = t.senderDomain
+        ? { trigger_type: 'sender_domain' as const, trigger_value: t.senderDomain }
+        : { trigger_type: 'description_contains' as const, trigger_value: t.description.slice(0, 60) }
+
+      const patch = field === 'category'
+        ? { category: newValue, type: t.type }
+        : { category: t.category, type: newValue as 'income' | 'expense' }
+
+      await supabase.from('user_email_rules' as any).upsert(
+        { user_id: user.id, ...rule, ...patch, updated_at: new Date().toISOString() },
+        { onConflict: 'user_id,trigger_type,trigger_value' }
+      )
+    } catch { /* silent — rule saving is non-critical */ }
+  }
+
   const updateTransactionCategory = (index: number, category: string) => {
+    const t = parsedTransactions[index]
+    if (t && t.category !== category) saveEmailRule(t, 'category', category)
     setParsedTransactions((prev) =>
       prev.map((t, i) => (i === index ? { ...t, category } : t))
     )
   }
 
   const updateTransactionType = (index: number, type: 'income' | 'expense') => {
+    const t = parsedTransactions[index]
+    if (t && t.type !== type) saveEmailRule(t, 'type', type)
     setParsedTransactions((prev) =>
       prev.map((t, i) => (i === index ? { ...t, type } : t))
     )
@@ -730,6 +758,25 @@ const Import = () => {
         </Button>
       </div>
 
+      {/* Anomaly summary */}
+      {parsedTransactions.some(t => t.anomaly) && (
+        <div className="space-y-1.5">
+          {parsedTransactions
+            .map((t, i) => ({ t, i }))
+            .filter(({ t }) => t.anomaly)
+            .slice(0, 3)
+            .map(({ t, i }) => (
+              <div key={i} className="flex items-start gap-2 p-3 rounded-lg border border-orange-200 bg-orange-50 dark:border-orange-800/40 dark:bg-orange-900/10 text-sm">
+                <Zap className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <span className="font-medium text-orange-700 dark:text-orange-400">{t.description}</span>
+                  <span className="text-orange-600 dark:text-orange-500 ml-1">— {t.anomaly}</span>
+                </div>
+              </div>
+            ))}
+        </div>
+      )}
+
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3">
         <Card className="p-3">
@@ -896,6 +943,12 @@ const Import = () => {
                       <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground w-fit">
                         <Mail className="w-2.5 h-2.5 shrink-0" />
                         <span className="truncate max-w-[100px]">{accountLabel}</span>
+                      </span>
+                    )}
+                    {t.anomaly && (
+                      <span className="flex items-center gap-0.5 text-[10px] text-orange-500 w-fit" title={t.anomaly}>
+                        <Zap className="w-2.5 h-2.5 shrink-0" />
+                        anomalia
                       </span>
                     )}
                   </div>

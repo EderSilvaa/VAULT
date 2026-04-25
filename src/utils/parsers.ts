@@ -12,6 +12,8 @@ export interface ImportedTransaction {
   confidence?: 'high' | 'medium' | 'low'
   installment?: { current: number; total: number }
   isRecurring?: boolean
+  senderDomain?: string  // domain of the Gmail sender — used to save email rules
+  anomaly?: string       // non-null when transaction looks unusual vs user history
   raw?: any
 }
 

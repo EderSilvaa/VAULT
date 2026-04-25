@@ -17,6 +17,16 @@ interface ParsedTransaction {
   confidence: 'high' | 'medium' | 'low'
   installment?: { current: number; total: number }
   isRecurring?: boolean
+  senderDomain?: string  // used to save domain rules when user corrects
+  anomaly?: string       // set when transaction looks unusual vs user history
+}
+
+interface EmailRule {
+  trigger_type: 'sender_domain' | 'description_contains'
+  trigger_value: string
+  category: string
+  type: 'income' | 'expense'
+  match_count: number
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -276,11 +286,44 @@ function buildUserContext(patterns: UserPattern[], avgIncome: number, avgExpense
     .map(p => `  - "${p.description}" → ${p.type === 'income' ? 'receita' : 'despesa'}, ${p.category} (${p.freq}x)`)
     .join('\n')
 
-  const incomeStr = avgIncome > 0 ? `Receita média: R$${avgIncome.toFixed(0)}` : ''
-  const expenseStr = avgExpense > 0 ? `Despesa média: R$${avgExpense.toFixed(0)}` : ''
-  const stats = [incomeStr, expenseStr].filter(Boolean).join(' | ')
+  return `\nHistórico de transações do usuário (use para categorizar melhor):\n${lines}`
+}
 
-  return `\nPadrões anteriores deste usuário (use para categorizar melhor):\n${lines}${stats ? '\n  ' + stats : ''}`
+function buildRulesContext(rules: EmailRule[]): string {
+  if (!rules.length) return ''
+
+  const domainRules = rules
+    .filter(r => r.trigger_type === 'sender_domain')
+    .map(r => `  - e-mails de @${r.trigger_value} → ${r.type === 'income' ? 'receita' : 'despesa'}, ${r.category}`)
+    .join('\n')
+
+  const descRules = rules
+    .filter(r => r.trigger_type === 'description_contains')
+    .map(r => `  - descrição contém "${r.trigger_value}" → ${r.type === 'income' ? 'receita' : 'despesa'}, ${r.category}`)
+    .join('\n')
+
+  const all = [domainRules, descRules].filter(Boolean).join('\n')
+  if (!all) return ''
+
+  return `\n⚡ REGRAS DO USUÁRIO (prioridade máxima — sempre seguir):\n${all}`
+}
+
+// Detect anomalies by comparing new transactions against user's historical averages
+function detectAnomalies(
+  transactions: ParsedTransaction[],
+  historicalAvg: Map<string, { avg: number; count: number }>
+): ParsedTransaction[] {
+  return transactions.map(t => {
+    const key = t.category
+    const hist = historicalAvg.get(key)
+    if (!hist || hist.count < 3) return t // not enough data
+
+    const ratio = t.amount / hist.avg
+    if (ratio >= 3) {
+      return { ...t, anomaly: `Valor 3x acima da sua média em ${key} (média: R$${hist.avg.toFixed(0)})` }
+    }
+    return t
+  })
 }
 
 // Bank-specific template parsers removed — AI handles all banks contextually.
@@ -645,7 +688,7 @@ function parseNFeXML(xml: string): { amount: number; emitter: string; date: stri
 // Parse single message → transaction(s)
 // Returns array: usually 1 item, but credit card statements can be many
 // ──────────────────────────────────────────────────────────────────────
-async function parseMessage(msg: any, accessToken: string, accountKey?: string, userContext?: string): Promise<ParsedTransaction[]> {
+async function parseMessage(msg: any, accessToken: string, accountKey?: string, userContext?: string, rulesContext?: string): Promise<ParsedTransaction[]> {
   const idPrefix = accountKey ? `gmail:${accountKey}:` : 'gmail:'
   const headers: Array<{ name: string; value: string }> = msg.payload?.headers || []
   const subject = headers.find(h => h.name === 'Subject')?.value || ''
@@ -726,8 +769,11 @@ async function parseMessage(msg: any, accessToken: string, accountKey?: string, 
   const statementItems = parseCreditCardStatement(body, msg.id, date, senderName, accountKey)
   if (statementItems) return statementItems
 
-  // AI parser — handles all banks, filters spam, uses user context for personalization
-  const aiResult = await parseWithAI(subject, body, senderName, userContext)
+  const senderDomain = from.match(/@([\w.-]+)/)?.[1]?.toLowerCase()
+
+  // AI parser — handles all banks, filters spam, uses user context + explicit rules
+  const combinedContext = [rulesContext, userContext].filter(Boolean).join('\n')
+  const aiResult = await parseWithAI(subject, body, senderName, combinedContext || undefined)
   if (aiResult !== null) {
     if (!aiResult.isTransaction) return []
     const installment = detectInstallment(combined)
@@ -741,6 +787,7 @@ async function parseMessage(msg: any, accessToken: string, accountKey?: string, 
       source_id: `${idPrefix}${msg.id}`,
       confidence: aiResult.confidence,
       installment,
+      senderDomain,
     }]
   }
 
@@ -762,6 +809,7 @@ async function parseMessage(msg: any, accessToken: string, accountKey?: string, 
     source_id: `${idPrefix}${msg.id}`,
     confidence,
     installment,
+    senderDomain,
   }]
 }
 
@@ -861,7 +909,8 @@ async function scanInbox(
   accessToken: string,
   days: number,
   accountKey?: string,
-  userContext?: string
+  userContext?: string,
+  rulesContext?: string
 ): Promise<{ transactions: ParsedTransaction[]; scanned: number }> {
   const afterEpoch = Math.floor(Date.now() / 1000) - days * 24 * 60 * 60
   const dateFilter = `after:${afterEpoch}`
@@ -882,7 +931,7 @@ async function scanInbox(
   // Process in parallel batches of 15 — bank parsers are instant, AI calls ~1s each
   for (let i = 0; i < messages.length; i += 15) {
     const batch = messages.slice(i, i + 15)
-    const results = await Promise.all(batch.map(msg => parseMessage(msg, accessToken, accountKey, userContext)))
+    const results = await Promise.all(batch.map(msg => parseMessage(msg, accessToken, accountKey, userContext, rulesContext)))
     for (const r of results) raw.push(...r)
   }
 
@@ -1108,39 +1157,60 @@ serve(async (req) => {
       return jsonError('Nenhuma conta Gmail conectada. Adicione uma conta primeiro.', 400)
     }
 
-    // Build personalized context from user's past transactions (fetched once for all accounts)
+    // Fetch user's explicit rules + historical patterns in parallel
     let userContext: string | undefined
+    let rulesContext: string | undefined
+    let historicalAvg = new Map<string, { avg: number; count: number }>()
+
     try {
-      const { data: patterns } = await adminClient
-        .from('transactions')
-        .select('description, category, type')
-        .eq('user_id', user.id)
-        .gte('created_at', new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString())
-        .not('source_id', 'is', null)
-        .order('created_at', { ascending: false })
-        .limit(200)
+      const [patternRes, rulesRes, avgRes] = await Promise.all([
+        adminClient
+          .from('transactions')
+          .select('description, category, type')
+          .eq('user_id', user.id)
+          .gte('created_at', new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString())
+          .order('created_at', { ascending: false })
+          .limit(200),
+        adminClient
+          .from('user_email_rules')
+          .select('trigger_type, trigger_value, category, type, match_count')
+          .eq('user_id', user.id)
+          .order('match_count', { ascending: false })
+          .limit(50),
+        adminClient
+          .from('transactions')
+          .select('category, amount')
+          .eq('user_id', user.id)
+          .gte('created_at', new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString()),
+      ])
 
-      if (patterns && patterns.length > 0) {
-        // Aggregate by description+category+type
+      // Build historical pattern context
+      if (patternRes.data?.length) {
         const freq = new Map<string, UserPattern>()
-        for (const p of patterns as any[]) {
+        for (const p of patternRes.data as any[]) {
           const key = `${p.description?.toLowerCase()}|${p.category}|${p.type}`
-          if (freq.has(key)) {
-            freq.get(key)!.freq++
-          } else {
-            freq.set(key, { description: p.description ?? '', category: p.category ?? 'Outros', type: p.type, freq: 1 })
-          }
+          if (freq.has(key)) freq.get(key)!.freq++
+          else freq.set(key, { description: p.description ?? '', category: p.category ?? 'Outros', type: p.type, freq: 1 })
         }
-        const sorted = Array.from(freq.values()).sort((a, b) => b.freq - a.freq)
-
-        const incomes = patterns.filter((p: any) => p.type === 'income')
-        const expenses = patterns.filter((p: any) => p.type === 'expense')
-        const avgIncome = incomes.length ? 0 : 0 // aggregate query not needed — context already helps
-        const avgExpense = 0
-
-        userContext = buildUserContext(sorted, avgIncome, avgExpense)
+        userContext = buildUserContext(Array.from(freq.values()).sort((a, b) => b.freq - a.freq), 0, 0)
       }
-    } catch { /* context is optional — scan proceeds without it */ }
+
+      // Build explicit rules context (highest priority)
+      if (rulesRes.data?.length) {
+        rulesContext = buildRulesContext(rulesRes.data as EmailRule[])
+      }
+
+      // Build historical averages for anomaly detection
+      if (avgRes.data?.length) {
+        const catSums = new Map<string, { sum: number; count: number }>()
+        for (const t of avgRes.data as any[]) {
+          const c = catSums.get(t.category) ?? { sum: 0, count: 0 }
+          c.sum += Number(t.amount); c.count++
+          catSums.set(t.category, c)
+        }
+        catSums.forEach((v, k) => historicalAvg.set(k, { avg: v.sum / v.count, count: v.count }))
+      }
+    } catch { /* context is optional */ }
 
     const allTransactions: ParsedTransaction[] = []
     let totalScanned = 0
@@ -1153,7 +1223,7 @@ serve(async (req) => {
           accountResults.push({ email: account.email, scanned: 0, found: 0, error: 'Token inválido — reconecte essa conta' })
           continue
         }
-        const { transactions: tx, scanned } = await scanInbox(accessToken, days, account.email, userContext)
+        const { transactions: tx, scanned } = await scanInbox(accessToken, days, account.email, userContext, rulesContext)
         allTransactions.push(...tx)
         totalScanned += scanned
         accountResults.push({ email: account.email, scanned, found: tx.length })
@@ -1166,8 +1236,9 @@ serve(async (req) => {
       }
     }
 
-    // Recurrence detection across all accounts
-    const finalTransactions = detectRecurring(allTransactions)
+    // Recurrence + anomaly detection across all accounts
+    const withAnomalies = detectAnomalies(allTransactions, historicalAvg)
+    const finalTransactions = detectRecurring(withAnomalies)
     finalTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
     return new Response(
