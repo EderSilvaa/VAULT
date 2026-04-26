@@ -284,8 +284,8 @@ const Dashboard = () => {
             </div>
           </SheetHeader>
 
-          <div className="flex flex-col h-[calc(100%-5rem)] min-h-0">
-            <nav className="space-y-1 p-3 flex-1 overflow-y-auto min-h-0">
+          <div className="flex flex-col flex-1 overflow-hidden">
+            <nav className="space-y-1 p-3 flex-1 overflow-y-auto">
               <p className="px-3 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Principal</p>
               <MenuItem icon={Activity} label="Dashboard" active={activeSection === 'dashboard'} onClick={() => goToSection('dashboard')} />
               <MenuItem icon={Upload} label="Importar Extrato" onClick={() => { navigate('/import'); setSidebarOpen(false); }} />
@@ -305,7 +305,11 @@ const Dashboard = () => {
               <MenuItem icon={Settings} label="Configurações" onClick={() => { setSidebarOpen(false); }} />
             </nav>
 
-            <div className="border-t p-3 shrink-0">
+            {/* Safe area padding for iOS home indicator */}
+            <div
+              className="border-t p-3 shrink-0"
+              style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
+            >
               <MenuItem icon={LogOut} label="Sair" onClick={() => { handleLogout(); setSidebarOpen(false); }} />
             </div>
           </div>
@@ -327,7 +331,7 @@ const Dashboard = () => {
                 const monthlyBurn = stats.monthlySavings // negative = burning
                 const isPositive = monthlyBurn >= 0
                 const burnPerMonth = Math.abs(monthlyBurn)
-                const alreadyNegative = currentBalance <= 0 && !isPositive
+                const alreadyNegative = currentBalance < 0 // negative balance is always critical regardless of monthly flow
                 const isCritical = alreadyNegative || (!isPositive && daysUntilZero > 0 && daysUntilZero < 15)
                 const isWarning = !isCritical && !isPositive && daysUntilZero >= 15 && daysUntilZero < 60
                 const isHealthy = !isCritical && !isWarning && (isPositive || daysUntilZero >= 60)
