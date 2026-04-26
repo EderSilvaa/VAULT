@@ -26,7 +26,7 @@ export interface CashFlowProjection {
 export function useTransactionStats() {
   const { user } = useAuth()
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ['transaction-stats', user?.id],
     queryFn: async () => {
       if (!user?.id) throw new Error("User not found");
@@ -469,9 +469,11 @@ export function useTransactionStats() {
     daysUntilZero: simulation ? simulatedDaysUntilZero : (data?.daysUntilZero || 0),
     transactions: data?.transactions || [],
     loading: isLoading,
+    refreshing: isFetching && !isLoading,
+    refetch,
     error: error ? (error as Error).message : null,
-    simulate: setSimulation, // Expose simulation setter
-    activeSimulation: simulation // Expose current simulation state
+    simulate: setSimulation,
+    activeSimulation: simulation
   }
 }
 

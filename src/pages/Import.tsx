@@ -72,6 +72,7 @@ const Import = () => {
   const [isScanningGmail, setIsScanningGmail] = useState(false)
   const [gmailDays, setGmailDays] = useState(90)
   const [scanStage, setScanStage] = useState('')
+  const [scanProgress, setScanProgress] = useState(0)
   const [scanResults, setScanResults] = useState<ScanAccountResult[] | null>(
     _session?.scanResults ?? null
   )
@@ -128,22 +129,24 @@ const Import = () => {
 
     setIsScanningGmail(true)
     setScanStage('Conectando ao Gmail...')
+    setScanProgress(5)
     setScanResults(null)
     clearScanSession()
 
     const baseStages = [
-      { delay: 2000, text: 'Buscando e-mails financeiros...' },
-      { delay: 6000, text: 'Analisando conteúdo dos e-mails...' },
-      { delay: 12000, text: 'Extraindo valores e categorias...' },
-      { delay: 20000, text: 'Quase lá, finalizando análise...' },
+      { delay: 2000,  text: 'Buscando e-mails financeiros...',   progress: 20 },
+      { delay: 6000,  text: 'Analisando conteúdo dos e-mails...', progress: 45 },
+      { delay: 12000, text: 'Extraindo valores e categorias...',  progress: 70 },
+      { delay: 20000, text: 'Quase lá, finalizando análise...',   progress: 88 },
     ]
-    const timers = baseStages.map(({ delay, text }) =>
-      setTimeout(() => setScanStage(text), delay)
+    const timers = baseStages.map(({ delay, text, progress }) =>
+      setTimeout(() => { setScanStage(text); setScanProgress(progress) }, delay)
     )
 
     try {
       const { transactions, scanned, accounts: results } = await gmailAccountsService.scanAll(gmailDays)
       timers.forEach(clearTimeout)
+      setScanProgress(100)
       setScanResults(results)
       await refreshAccounts()
 
@@ -167,6 +170,7 @@ const Import = () => {
     } finally {
       setIsScanningGmail(false)
       setScanStage('')
+      setScanProgress(0)
     }
   }
 
@@ -590,19 +594,32 @@ const Import = () => {
                         <option value={180}>180 dias</option>
                         <option value={365}>1 ano</option>
                       </select>
-                      <Button
-                        onClick={handleGmailScan}
-                        disabled={isScanningGmail || isAddingAccount}
-                        className="flex-1 gap-2"
-                      >
-                        {isScanningGmail ? (
-                          <><Loader2 className="w-4 h-4 animate-spin" />{scanStage || 'Escaneando...'}</>
-                        ) : (
-                          <><RefreshCw className="w-4 h-4" />
-                            Escanear {accounts.length === 1 ? 'conta' : `${accounts.length} contas`}
-                          </>
+                      <div className="flex-1 flex flex-col gap-2">
+                        <Button
+                          onClick={handleGmailScan}
+                          disabled={isScanningGmail || isAddingAccount}
+                          className="w-full gap-2"
+                        >
+                          {isScanningGmail ? (
+                            <><Loader2 className="w-4 h-4 animate-spin" />{scanStage || 'Escaneando...'}</>
+                          ) : (
+                            <><RefreshCw className="w-4 h-4" />
+                              Escanear {accounts.length === 1 ? 'conta' : `${accounts.length} contas`}
+                            </>
+                          )}
+                        </Button>
+                        {isScanningGmail && (
+                          <div className="space-y-1">
+                            <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
+                              <div
+                                className="h-full bg-primary rounded-full transition-all duration-700 ease-out"
+                                style={{ width: `${scanProgress}%` }}
+                              />
+                            </div>
+                            <p className="text-xs text-muted-foreground text-right">{scanProgress}%</p>
+                          </div>
                         )}
-                      </Button>
+                      </div>
                     </div>
                   </div>
                 )}
