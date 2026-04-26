@@ -85,13 +85,15 @@ const Import = () => {
 
   const ACCEPTED_EXTENSIONS = ['.csv', '.ofx', '.xlsx', '.xls']
 
-  const refreshAccounts = async () => {
-    if (!user?.id) return
+  const refreshAccounts = async (): Promise<GmailAccount[]> => {
+    if (!user?.id) return []
     try {
       const list = await gmailAccountsService.list(user.id)
       setAccounts(list)
+      return list
     } catch (err: any) {
       toast({ title: 'Erro ao carregar contas', description: err.message, variant: 'destructive' })
+      return []
     } finally {
       setAccountsLoading(false)
     }
@@ -121,8 +123,9 @@ const Import = () => {
     }
   }
 
-  const handleGmailScan = async () => {
-    if (accounts.length === 0) {
+  const handleGmailScan = async (connectedAccounts?: GmailAccount[]) => {
+    const activeAccounts = connectedAccounts ?? accounts
+    if (activeAccounts.length === 0) {
       toast({ title: 'Nenhuma conta conectada', description: 'Adicione uma conta Gmail primeiro.', variant: 'destructive' })
       return
     }
@@ -186,7 +189,13 @@ const Import = () => {
   }, [parsedTransactions, selectedIds, scanResults])
 
   useEffect(() => {
-    if (user?.id) refreshAccounts()
+    if (!user?.id) return
+    refreshAccounts().then((list) => {
+      if (searchParams.get('autoscan') === 'true' && list.length > 0) {
+        setTab('gmail')
+        handleGmailScan(list)
+      }
+    })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id])
 

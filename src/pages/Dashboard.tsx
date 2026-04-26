@@ -70,7 +70,7 @@ const Dashboard = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeSection, setActiveSection] = useState<Section>('dashboard');
 
-  const { stats, monthlyData, cashFlowProjection, daysUntilZero, transactions, loading: statsLoading, refreshing, refetch } = useTransactionStats();
+  const { stats, monthlyData, cashFlowProjection, daysUntilZero, transactions, loading: statsLoading } = useTransactionStats();
   const { transactions: latestTransactions, isLoading: transactionsLoading, deleteTransaction: deleteTransactionHook, createTransaction, isCreating } = useTransactions(user?.id);
   const { goals, refreshGoals } = useSmartGoals();
 
@@ -375,12 +375,11 @@ const Dashboard = () => {
                           <div className="flex items-center gap-1.5">
                             <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Saldo atual</p>
                             <button
-                              onClick={() => refetch()}
-                              disabled={refreshing}
-                              title="Atualizar dados"
-                              className="text-muted-foreground hover:text-foreground transition-colors"
+                              onClick={() => navigate('/import?tab=gmail&autoscan=true')}
+                              title="Sincronizar Gmail agora"
+                              className="text-muted-foreground hover:text-primary transition-colors"
                             >
-                              <RefreshCw className={`w-3 h-3 ${refreshing ? 'animate-spin' : ''}`} />
+                              <RefreshCw className="w-3 h-3" />
                             </button>
                           </div>
                           <p className="text-lg font-bold tabular-nums">
