@@ -289,15 +289,85 @@ interface UserPattern {
   freq: number
 }
 
-function buildUserContext(patterns: UserPattern[], avgIncome: number, avgExpense: number): string {
-  if (!patterns.length) return ''
+interface HistoricalTx {
+  description: string | null
+  category: string | null
+  type: 'income' | 'expense'
+  amount: number
+  date: string | null
+}
 
-  const lines = patterns
-    .slice(0, 20)
-    .map(p => `  - "${p.description}" → ${p.type === 'income' ? 'receita' : 'despesa'}, ${p.category} (${p.freq}x)`)
-    .join('\n')
+interface AccountInfo {
+  email: string
+  last_scan_at: string | null
+}
 
-  return `\nHistórico de transações do usuário (use para categorizar melhor):\n${lines}`
+// Group historical transactions to detect recurring charges (3+ occurrences of
+// same first-word + rounded amount). Returns a sorted list, most-frequent first.
+function detectHistoricalRecurring(txs: HistoricalTx[]): Array<{
+  label: string
+  amount: number
+  type: 'income' | 'expense'
+  count: number
+}> {
+  const groups = new Map<string, { label: string; amount: number; type: 'income' | 'expense'; count: number }>()
+  for (const t of txs) {
+    if (!t.description || !t.amount) continue
+    const firstWord = t.description.split(/\s+/)[0]?.toLowerCase()
+    if (!firstWord || firstWord.length < 3) continue
+    const rounded = Math.round(t.amount)
+    const key = `${firstWord}:${rounded}:${t.type}`
+    const existing = groups.get(key)
+    if (existing) existing.count++
+    else groups.set(key, { label: t.description.slice(0, 50), amount: t.amount, type: t.type, count: 1 })
+  }
+  return Array.from(groups.values())
+    .filter(g => g.count >= 3)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 15)
+}
+
+function buildGlobalContext(
+  accounts: AccountInfo[],
+  patterns: UserPattern[],
+  recurring: Array<{ label: string; amount: number; type: 'income' | 'expense'; count: number }>,
+  monthlyAvg: { income: number; expense: number },
+  totalCount: number,
+): string {
+  const sections: string[] = []
+
+  // Accounts — tells the AI this is a multi-account user, same person
+  if (accounts.length > 1) {
+    const accLines = accounts
+      .map(a => `  - ${a.email}${a.last_scan_at ? ` (último scan: ${a.last_scan_at.slice(0, 10)})` : ' (primeiro scan)'}`)
+      .join('\n')
+    sections.push(`📧 Este usuário tem ${accounts.length} contas Gmail conectadas (MESMO DONO):\n${accLines}\n→ É esperado ver cobranças iguais entre as contas (cartões diferentes do mesmo dono).`)
+  }
+
+  // Recurring — single most useful signal for dedup + categorization
+  if (recurring.length > 0) {
+    const recLines = recurring
+      .map(r => `  - ${r.label} ~R$ ${r.amount.toFixed(2)} (${r.type === 'income' ? 'receita' : 'despesa'}, ${r.count}x histórico)`)
+      .join('\n')
+    sections.push(`🔁 Recorrentes confirmados do usuário:\n${recLines}\n→ Se um novo email casar com algum recorrente acima (mesmo remetente/valor), categorize igual e marque confidence:high.`)
+  }
+
+  // Monthly averages — for anomaly awareness
+  if (totalCount > 0) {
+    sections.push(`📊 Perfil financeiro (últimos 90 dias, ${totalCount} transações):\n  - Receita média/mês: R$ ${monthlyAvg.income.toFixed(2)}\n  - Despesa média/mês: R$ ${monthlyAvg.expense.toFixed(2)}`)
+  }
+
+  // Top patterns (legacy: user historically classified X as Y)
+  if (patterns.length > 0) {
+    const patLines = patterns
+      .slice(0, 10)
+      .map(p => `  - "${p.description.slice(0, 40)}" → ${p.type === 'income' ? 'receita' : 'despesa'}, ${p.category} (${p.freq}x)`)
+      .join('\n')
+    sections.push(`📚 Como o usuário classificou no passado:\n${patLines}`)
+  }
+
+  if (sections.length === 0) return ''
+  return `\n👤 CONTEXTO DO USUÁRIO:\n\n${sections.join('\n\n')}\n`
 }
 
 function buildRulesContext(rules: EmailRule[]): string {
@@ -869,14 +939,19 @@ Retorne APENAS JSON no formato:
 }
 
 Regras:
-- isTransaction=true SOMENTE para: comprovante PIX enviado/recebido, TED confirmada, boleto pago, NF-e, assinatura cobrada, fatura paga, recibo de pagamento, invoice/receipt de serviços SaaS (Anthropic, OpenAI, AWS, Stripe etc.)
-- isTransaction=false para: ofertas de crédito, marketing, "regularize sua dívida", "pague agora" sem comprovante, promoções, alertas sem transação confirmada
+- isTransaction=true SOMENTE para: comprovante PIX enviado/recebido, TED confirmada, boleto PAGO (não "vence em"), NF-e, assinatura cobrada, fatura PAGA, recibo de pagamento, invoice/receipt de serviços SaaS (Anthropic, OpenAI, AWS, Stripe etc.)
+- isTransaction=false para: ofertas de crédito, marketing, "regularize sua dívida", "pague agora" sem comprovante, promoções, alertas, "fatura GERADA"/"sua fatura está disponível" SEM confirmação de pagamento, "vencimento em" sem "pago"
 - O e-mail pode estar em inglês ou português — analisar ambos
 - amount: número BRL sem símbolo (ex: 150.00)
 - type=income: dinheiro ENTRANDO na conta (recebimentos, vendas, pix recebido)
 - type=expense: dinheiro SAINDO (pagamentos, boletos, assinaturas, pix enviado)
 - confidence=high: valor e tipo certos; medium: valor provável; low: ambíguo
-- Use os padrões anteriores do usuário para melhorar categorização e descrição quando disponíveis`
+
+USANDO O CONTEXTO DO USUÁRIO (acima):
+- Se o email casar com um RECORRENTE listado (mesmo remetente E valor próximo ±5%), use a MESMA descrição/categoria do recorrente e marque confidence:high
+- Se o usuário tem múltiplas contas Gmail, é MESMO DONO — não tente flagar como duplicata aqui (faremos isso depois)
+- Se o valor for 3x maior que a despesa média mensal e for de remetente novo, marque confidence:low (provavelmente notificação de dívida, não pagamento real)
+- Use os padrões passados pra escolher categoria — se o usuário sempre classifica "Bluefit" como "Fixo", siga o mesmo`
 
   try {
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -1176,11 +1251,11 @@ serve(async (req) => {
       const [patternRes, rulesRes, avgRes] = await Promise.all([
         adminClient
           .from('transactions')
-          .select('description, category, type')
+          .select('description, category, type, amount, date')
           .eq('user_id', user.id)
           .gte('created_at', new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString())
           .order('created_at', { ascending: false })
-          .limit(200),
+          .limit(300),
         adminClient
           .from('user_email_rules')
           .select('trigger_type, trigger_value, category, type, match_count')
@@ -1189,38 +1264,73 @@ serve(async (req) => {
           .limit(50),
         adminClient
           .from('transactions')
-          .select('category, amount')
+          .select('category, amount, type, date')
           .eq('user_id', user.id)
           .gte('created_at', new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString()),
       ])
 
-      // Build historical pattern context
-      if (patternRes.data?.length) {
-        const freq = new Map<string, UserPattern>()
-        for (const p of patternRes.data as any[]) {
-          const key = `${p.description?.toLowerCase()}|${p.category}|${p.type}`
-          if (freq.has(key)) freq.get(key)!.freq++
-          else freq.set(key, { description: p.description ?? '', category: p.category ?? 'Outros', type: p.type, freq: 1 })
+      const patternRows = (patternRes.data ?? []) as any[]
+      const avgRows = (avgRes.data ?? []) as any[]
+
+      // Aggregate user-level patterns (description+category+type frequency)
+      const freq = new Map<string, UserPattern>()
+      for (const p of patternRows) {
+        const key = `${p.description?.toLowerCase()}|${p.category}|${p.type}`
+        if (freq.has(key)) freq.get(key)!.freq++
+        else freq.set(key, { description: p.description ?? '', category: p.category ?? 'Outros', type: p.type, freq: 1 })
+      }
+      const sortedPatterns = Array.from(freq.values()).sort((a, b) => b.freq - a.freq)
+
+      // Detect recurring charges (3+ occurrences of same first-word+amount)
+      const recurringHistory = detectHistoricalRecurring(
+        patternRows.map(p => ({
+          description: p.description ?? null,
+          category: p.category ?? null,
+          type: p.type,
+          amount: Number(p.amount ?? 0),
+          date: p.date ?? null,
+        }))
+      )
+
+      // Monthly income/expense averages from last 90d
+      let monthlyIncome = 0
+      let monthlyExpense = 0
+      if (avgRows.length) {
+        let inc = 0
+        let exp = 0
+        for (const t of avgRows) {
+          if (t.type === 'income') inc += Number(t.amount)
+          else exp += Number(t.amount)
         }
-        userContext = buildUserContext(Array.from(freq.values()).sort((a, b) => b.freq - a.freq), 0, 0)
+        monthlyIncome = inc / 3 // 90d ÷ 3 → monthly
+        monthlyExpense = exp / 3
       }
 
-      // Build explicit rules context (highest priority)
-      if (rulesRes.data?.length) {
-        rulesContext = buildRulesContext(rulesRes.data as EmailRule[])
-      }
-
-      // Build historical averages for anomaly detection
-      if (avgRes.data?.length) {
+      // Per-category historical averages (used by detectAnomalies later)
+      if (avgRows.length) {
         const catSums = new Map<string, { sum: number; count: number }>()
-        for (const t of avgRes.data as any[]) {
+        for (const t of avgRows) {
           const c = catSums.get(t.category) ?? { sum: 0, count: 0 }
           c.sum += Number(t.amount); c.count++
           catSums.set(t.category, c)
         }
         catSums.forEach((v, k) => historicalAvg.set(k, { avg: v.sum / v.count, count: v.count }))
       }
-    } catch { /* context is optional */ }
+
+      // Build global context that travels in EVERY AI call this scan
+      userContext = buildGlobalContext(
+        accounts.map(a => ({ email: a.email, last_scan_at: a.last_scan_at })),
+        sortedPatterns,
+        recurringHistory,
+        { income: monthlyIncome, expense: monthlyExpense },
+        patternRows.length,
+      )
+
+      // Build explicit rules context (highest priority)
+      if (rulesRes.data?.length) {
+        rulesContext = buildRulesContext(rulesRes.data as EmailRule[])
+      }
+    } catch (e) { console.error('[parse-gmail] context build failed:', e) /* context is optional */ }
 
     const allTransactions: ParsedTransaction[] = []
     let totalScanned = 0
