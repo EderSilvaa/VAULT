@@ -408,25 +408,29 @@ const Import = () => {
       const created = await createTransactions(toCreate)
       const skipped = toCreate.length - created.length
 
-      toast({
-        title: 'Importação concluída!',
-        description: skipped > 0
-          ? `${created.length} transações importadas, ${skipped} duplicatas ignoradas.`
-          : `${created.length} transações importadas com sucesso.`,
-      })
-
-      setFiles([])
-      setParsedTransactions([])
+      // Clear scan session immediately so reopening Import is fresh.
+      // useTransactions.onSuccess already shows a success toast — no need to duplicate here.
       clearScanSession()
-      navigate('/dashboard')
+
+      if (skipped > 0 && created.length === 0) {
+        toast({
+          title: 'Tudo já estava importado',
+          description: `${skipped} transação(ões) já existiam — atualizando dashboard.`,
+        })
+      }
+
+      // Navigate first to guarantee the route change happens; state cleanup runs in finally.
+      navigate('/dashboard', { replace: true })
     } catch (error: any) {
       toast({
         title: 'Erro na importação',
-        description: error.message || 'Erro ao salvar transações.',
+        description: error?.message || 'Erro ao salvar transações.',
         variant: 'destructive',
       })
     } finally {
       setIsProcessing(false)
+      setFiles([])
+      setParsedTransactions([])
     }
   }
 
