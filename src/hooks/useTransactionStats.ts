@@ -134,6 +134,7 @@ export function useTransactionStats() {
     },
     enabled: !!user?.id,
     staleTime: 1000 * 60 * 5, // 5 minutes
+    refetchOnMount: 'always', // ensures dashboard re-fetches after import navigation
   })
 
   // Helper functions moved inside (or could be outside if pure)

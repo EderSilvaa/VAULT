@@ -97,24 +97,53 @@ export const transactionsService = {
   /**
    * Create multiple transactions (Batch)
    * Filters out duplicates by source_id before inserting.
+   *
+   * Gmail source_ids historically used `gmail:<msgId>` and now use
+   * `gmail:<email>:<msgId>` (multi-account). We dedupe by extracting the
+   * trailing message ID so legacy and new entries don't get re-inserted.
    */
   async createTransactions(userId: string, inputs: TransactionInput[]): Promise<Transaction[]> {
-    // Deduplicate: check which source_ids already exist in DB
     const sourceIds = inputs.map(i => i.source_id).filter(Boolean) as string[]
-    let existingSourceIds = new Set<string>()
+    const hasGmail = sourceIds.some(id => id.startsWith('gmail:'))
+    const nonGmailIds = sourceIds.filter(id => !id.startsWith('gmail:'))
 
-    if (sourceIds.length > 0) {
+    const existingExact = new Set<string>()
+    const existingGmailMsgIds = new Set<string>()
+
+    // Non-gmail: exact-match check
+    if (nonGmailIds.length > 0) {
       const { data: existing } = await supabase
         .from('transactions')
         .select('source_id')
         .eq('user_id', userId)
-        .in('source_id', sourceIds)
-
-      existingSourceIds = new Set((existing ?? []).map((r: any) => r.source_id))
+        .in('source_id', nonGmailIds)
+      ;(existing ?? []).forEach((r: any) => existingExact.add(r.source_id))
     }
 
-    // Filter out already-imported transactions
-    const newInputs = inputs.filter(i => !i.source_id || !existingSourceIds.has(i.source_id))
+    // Gmail: fetch all gmail entries for this user, dedupe by trailing msgId
+    if (hasGmail) {
+      const { data: existingGmail } = await supabase
+        .from('transactions')
+        .select('source_id')
+        .eq('user_id', userId)
+        .like('source_id', 'gmail:%')
+      ;(existingGmail ?? []).forEach((r: any) => {
+        const parts = r.source_id.split(':')
+        const msgId = parts[parts.length - 1]
+        if (msgId) existingGmailMsgIds.add(msgId)
+      })
+    }
+
+    const newInputs = inputs.filter(i => {
+      if (!i.source_id) return true
+      if (i.source_id.startsWith('gmail:')) {
+        const parts = i.source_id.split(':')
+        const msgId = parts[parts.length - 1]
+        return !existingGmailMsgIds.has(msgId)
+      }
+      return !existingExact.has(i.source_id)
+    })
+
     if (newInputs.length === 0) return []
 
     const { data, error } = await supabase
