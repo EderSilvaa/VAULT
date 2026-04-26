@@ -88,8 +88,9 @@ serve(async (req) => {
     </div>
     <div style="padding: 16px 32px; border-top: 1px solid #f0f0f0;">
       <p style="color: #aaa; font-size: 12px; margin: 0;">
-        Você recebe este alerta porque tem uma conta Vault.
-        <a href="https://vault.tec.br" style="color: #8c23f5;">vault.tec.br</a>
+        Vault · <a href="https://vault.tec.br" style="color: #8c23f5; text-decoration: none;">vault.tec.br</a>
+        &nbsp;·&nbsp;
+        <a href="https://vault.tec.br/perfil?unsubscribe=das" style="color: #aaa; text-decoration: none;">Cancelar inscrição</a>
       </p>
     </div>
   </div>
