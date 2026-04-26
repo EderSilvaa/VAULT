@@ -43,10 +43,16 @@ const BANK_SENDERS = [
   'neon.com.br', 'will.com.vc', 'next.me',
   'xpi.com.br', 'btgpactual.com', 'cora.com.br',
   'contasimples.com.br', 'warren.com.br', 'modal.com.br', 'sofisa.com.br',
+  // International SaaS billing (common for MEI / tech companies)
+  'anthropic.com', 'openai.com', 'stripe.com', 'aws.amazon.com',
+  'billing.google.com', 'microsoft.com', 'digitalocean.com',
+  'notion.so', 'figma.com', 'github.com', 'vercel.com', 'netlify.com',
+  'cloudflare.com', 'paypal.com', 'wise.com',
 ]
 const BANK_QUERY = BANK_SENDERS.map(d => `from:${d}`).join(' OR ')
 
 const KEYWORD_QUERY = [
+  // PT-BR
   'pix', 'boleto', 'fatura', 'pagamento', 'transferencia',
   'transferência', 'comprovante', 'cobrança', 'cobranca',
   'extrato', 'recebido', 'creditado', 'debitado',
@@ -54,6 +60,11 @@ const KEYWORD_QUERY = [
   'financiamento', 'mensalidade', 'assinatura', 'aluguel',
   'serasa', 'divida', 'dívida', 'negativacao',
   'nota fiscal', 'nfe',
+  // EN — invoices, SaaS billing, international services
+  'invoice', 'receipt', 'billing', 'subscription', 'payment receipt',
+  'payment confirmation', 'amount due', 'amount charged',
+  'your invoice', 'your receipt', 'order confirmation',
+  'charge', 'statement',
 ].map(t => (t.includes(' ') ? `"${t}"` : t)).join(' OR ')
 
 // ──────────────────────────────────────────────────────────────────────
@@ -858,8 +869,9 @@ Retorne APENAS JSON no formato:
 }
 
 Regras:
-- isTransaction=true SOMENTE para: comprovante PIX enviado/recebido, TED confirmada, boleto pago, NF-e, assinatura cobrada, fatura paga, recibo de pagamento
+- isTransaction=true SOMENTE para: comprovante PIX enviado/recebido, TED confirmada, boleto pago, NF-e, assinatura cobrada, fatura paga, recibo de pagamento, invoice/receipt de serviços SaaS (Anthropic, OpenAI, AWS, Stripe etc.)
 - isTransaction=false para: ofertas de crédito, marketing, "regularize sua dívida", "pague agora" sem comprovante, promoções, alertas sem transação confirmada
+- O e-mail pode estar em inglês ou português — analisar ambos
 - amount: número BRL sem símbolo (ex: 150.00)
 - type=income: dinheiro ENTRANDO na conta (recebimentos, vendas, pix recebido)
 - type=expense: dinheiro SAINDO (pagamentos, boletos, assinaturas, pix enviado)
