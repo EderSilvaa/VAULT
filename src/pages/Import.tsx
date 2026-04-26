@@ -123,7 +123,7 @@ const Import = () => {
     }
   }
 
-  const handleGmailScan = async (connectedAccounts?: GmailAccount[]) => {
+  const handleGmailScan = async (connectedAccounts?: GmailAccount[], force = false) => {
     const activeAccounts = connectedAccounts ?? accounts
     if (activeAccounts.length === 0) {
       toast({ title: 'Nenhuma conta conectada', description: 'Adicione uma conta Gmail primeiro.', variant: 'destructive' })
@@ -131,23 +131,29 @@ const Import = () => {
     }
 
     setIsScanningGmail(true)
-    setScanStage('Conectando ao Gmail...')
+    setScanStage(force ? 'Re-escaneando histórico completo...' : 'Buscando novos e-mails...')
     setScanProgress(5)
     setScanResults(null)
     clearScanSession()
 
-    const baseStages = [
-      { delay: 2000,  text: 'Buscando e-mails financeiros...',   progress: 20 },
-      { delay: 6000,  text: 'Analisando conteúdo dos e-mails...', progress: 45 },
-      { delay: 12000, text: 'Extraindo valores e categorias...',  progress: 70 },
-      { delay: 20000, text: 'Quase lá, finalizando análise...',   progress: 88 },
-    ]
+    const baseStages = force
+      ? [
+          { delay: 2000,  text: 'Buscando e-mails financeiros...',   progress: 20 },
+          { delay: 6000,  text: 'Analisando conteúdo dos e-mails...', progress: 45 },
+          { delay: 12000, text: 'Extraindo valores e categorias...',  progress: 70 },
+          { delay: 20000, text: 'Quase lá, finalizando análise...',   progress: 88 },
+        ]
+      : [
+          { delay: 1500, text: 'Buscando novidades...',              progress: 30 },
+          { delay: 4000, text: 'Analisando com a AI...',             progress: 65 },
+          { delay: 8000, text: 'Quase lá...',                        progress: 88 },
+        ]
     const timers = baseStages.map(({ delay, text, progress }) =>
       setTimeout(() => { setScanStage(text); setScanProgress(progress) }, delay)
     )
 
     try {
-      const { transactions, scanned, accounts: results } = await gmailAccountsService.scanAll(gmailDays)
+      const { transactions, scanned, accounts: results } = await gmailAccountsService.scanAll(gmailDays, force)
       timers.forEach(clearTimeout)
       setScanProgress(100)
       setScanResults(results)
@@ -609,7 +615,7 @@ const Import = () => {
                       </select>
                       <div className="flex-1 flex flex-col gap-2">
                         <Button
-                          onClick={handleGmailScan}
+                          onClick={() => handleGmailScan()}
                           disabled={isScanningGmail || isAddingAccount}
                           className="w-full gap-2"
                         >
@@ -617,7 +623,7 @@ const Import = () => {
                             <><Loader2 className="w-4 h-4 animate-spin" />{scanStage || 'Escaneando...'}</>
                           ) : (
                             <><RefreshCw className="w-4 h-4" />
-                              Escanear {accounts.length === 1 ? 'conta' : `${accounts.length} contas`}
+                              Buscar novos e-mails
                             </>
                           )}
                         </Button>
@@ -631,6 +637,19 @@ const Import = () => {
                             </div>
                             <p className="text-xs text-muted-foreground text-right">{scanProgress}%</p>
                           </div>
+                        )}
+                        {!isScanningGmail && accounts.some(a => a.last_scan_at) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (confirm(`Re-escanear ${gmailDays} dias completos? Pode trazer e-mails já analisados antes (útil quando subimos uma versão nova da AI).`)) {
+                                handleGmailScan(undefined, true)
+                              }
+                            }}
+                            className="text-xs text-muted-foreground hover:text-primary underline self-end"
+                          >
+                            Re-escanear histórico completo
+                          </button>
                         )}
                       </div>
                     </div>

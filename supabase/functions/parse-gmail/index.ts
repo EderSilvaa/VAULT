@@ -922,9 +922,12 @@ async function scanInbox(
   days: number,
   accountKey?: string,
   userContext?: string,
-  rulesContext?: string
+  rulesContext?: string,
+  afterEpochOverride?: number
 ): Promise<{ transactions: ParsedTransaction[]; scanned: number }> {
-  const afterEpoch = Math.floor(Date.now() / 1000) - days * 24 * 60 * 60
+  // afterEpochOverride lets the caller pass last_scan_at-1h for incremental rescans;
+  // falls back to a `days`-wide window when no override is provided (first scan / force).
+  const afterEpoch = afterEpochOverride ?? (Math.floor(Date.now() / 1000) - days * 24 * 60 * 60)
   const dateFilter = `after:${afterEpoch}`
   const bankQuery = `(${BANK_QUERY}) ${dateFilter}`
   const keywordQuery = `(${KEYWORD_QUERY}) ${dateFilter} -category:promotions -category:social`
@@ -1074,7 +1077,7 @@ serve(async (req) => {
 
   try {
     const body = await req.json()
-    const { provider_token, provider_refresh_token, days = 90 } = body
+    const { provider_token, provider_refresh_token, days = 90, force = false } = body
 
     // ────────────── Legacy single-account mode ──────────────
     if (provider_token || provider_refresh_token) {
@@ -1122,8 +1125,8 @@ serve(async (req) => {
 
     let accounts = (await adminClient
       .from('gmail_accounts')
-      .select('id, email, refresh_token')
-      .eq('user_id', user.id)).data as Array<{ id: string; email: string; refresh_token: string }> | null
+      .select('id, email, refresh_token, last_scan_at')
+      .eq('user_id', user.id)).data as Array<{ id: string; email: string; refresh_token: string; last_scan_at: string | null }> | null
 
     // Auto-migration: if no accounts but user has the legacy token in profiles,
     // discover the email via Gmail API and migrate it into gmail_accounts.
@@ -1149,14 +1152,9 @@ serve(async (req) => {
                 { user_id: user.id, email, refresh_token: legacyToken },
                 { onConflict: 'user_id,email' }
               )
-              accounts = [{
-                id: '', // re-read below
-                email,
-                refresh_token: legacyToken,
-              }]
               const fresh = await adminClient
                 .from('gmail_accounts')
-                .select('id, email, refresh_token')
+                .select('id, email, refresh_token, last_scan_at')
                 .eq('user_id', user.id)
               accounts = fresh.data as any
             }
@@ -1235,10 +1233,23 @@ serve(async (req) => {
           accountResults.push({ email: account.email, scanned: 0, found: 0, error: 'Token inválido — reconecte essa conta' })
           continue
         }
-        const { transactions: tx, scanned } = await scanInbox(accessToken, days, account.email, userContext, rulesContext)
+
+        // Incremental: pick up where we left off, with 1h overlap to swallow clock skew.
+        // Force or first-ever scan: use the full `days` window.
+        let afterEpochOverride: number | undefined
+        if (!force && account.last_scan_at) {
+          const lastScanEpoch = Math.floor(new Date(account.last_scan_at).getTime() / 1000)
+          afterEpochOverride = lastScanEpoch - 3600
+        }
+
+        const { transactions: tx, scanned } = await scanInbox(
+          accessToken, days, account.email, userContext, rulesContext, afterEpochOverride
+        )
         allTransactions.push(...tx)
         totalScanned += scanned
         accountResults.push({ email: account.email, scanned, found: tx.length })
+
+        // Only stamp last_scan_at after a successful scan, so failures retry the same window.
         await adminClient
           .from('gmail_accounts')
           .update({ last_scan_at: new Date().toISOString() })

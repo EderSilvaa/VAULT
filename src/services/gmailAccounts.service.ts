@@ -130,14 +130,19 @@ export const gmailAccountsService = {
    * Scans all Gmail accounts connected for the current user.
    * The Edge Function reads accounts from the DB (server-side) so the user JWT
    * in the Authorization header is enough — no provider tokens passed.
+   *
+   * Default behavior is INCREMENTAL — the server picks up from each account's
+   * last_scan_at, so re-scans only fetch new emails. Pass force=true to ignore
+   * last_scan_at and re-process the full `days` window (e.g. after a parser
+   * upgrade where you want the new AI to re-evaluate older emails).
    */
-  async scanAll(days = 90): Promise<{
+  async scanAll(days = 90, force = false): Promise<{
     transactions: ImportedTransaction[]
     scanned: number
     accounts: ScanAccountResult[]
   }> {
     const { data, error } = await supabase.functions.invoke('parse-gmail', {
-      body: { days },
+      body: { days, force },
     })
     if (error) throw error
     if (data?.error) throw new Error(data.error)
